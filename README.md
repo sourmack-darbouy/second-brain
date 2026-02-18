@@ -4,6 +4,7 @@ A personal knowledge management system built with Next.js.
 
 ## Features
 
+- **Authentication** - Password-protected access
 - **Dashboard** - Overview of memories, tasks, and recent documents
 - **Memories** - Long-term and daily notes
 - **Documents** - Store and browse important files
