@@ -57,6 +57,55 @@ function ContactsContent() {
   const [filterTag, setFilterTag] = useState('');
   const [showDuplicates, setShowDuplicates] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState<{ duplicates: { field: string; contact: Contact }[]; data: any } | null>(null);
+  const [bulkContacts, setBulkContacts] = useState<Partial<Contact>[]>([]);
+  const [showBulkImport, setShowBulkImport] = useState(false);
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0, duplicates: 0 });
+
+  const importBulkContacts = async () => {
+    setBulkImporting(true);
+    setBulkProgress({ done: 0, total: bulkContacts.length, duplicates: 0 });
+    
+    let imported = 0;
+    let duplicates = 0;
+    
+    for (const contact of bulkContacts) {
+      try {
+        const res = await fetch('/api/contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...contact, forceCreate: false }),
+        });
+        
+        const data = await res.json();
+        
+        if (data.duplicate) {
+          duplicates++;
+          // Auto-merge with existing contact
+          if (data.duplicates[0]?.contact?.id) {
+            await fetch('/api/contacts', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ...contact, id: data.duplicates[0].contact.id }),
+            });
+          }
+        } else {
+          imported++;
+        }
+        
+        setBulkProgress({ done: imported + duplicates, total: bulkContacts.length, duplicates });
+      } catch (error) {
+        console.error('Failed to import contact:', error);
+      }
+    }
+    
+    setBulkImporting(false);
+    setShowBulkImport(false);
+    setBulkContacts([]);
+    fetchContacts();
+    
+    alert(`Import complete!\n${imported} new contacts added\n${duplicates} duplicates merged/skipped`);
+  };
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -149,6 +198,50 @@ function ContactsContent() {
     }
   };
 
+  const parseCSV = (text: string): Partial<Contact>[] => {
+    const contacts: Partial<Contact>[] = [];
+    const lines = text.split('\n').filter(l => l.trim());
+    
+    if (lines.length < 2) return contacts;
+    
+    // Parse header
+    const header = lines[0].split(',').map(h => h.toLowerCase().trim().replace(/"/g, ''));
+    
+    // Map common column names
+    const fieldMap: Record<string, string> = {
+      'first name': 'firstName', 'firstname': 'firstName', 'given name': 'firstName',
+      'last name': 'lastName', 'lastname': 'lastName', 'surname': 'lastName', 'family name': 'lastName',
+      'email': 'emailPrimary', 'e-mail': 'emailPrimary', 'email address': 'emailPrimary',
+      'phone': 'phoneMobile', 'mobile': 'phoneMobile', 'mobile phone': 'phoneMobile', 'cell': 'phoneMobile',
+      'work phone': 'phoneWork', 'business phone': 'phoneWork',
+      'company': 'company', 'organization': 'company', 'organisation': 'company',
+      'title': 'jobTitle', 'job title': 'jobTitle', 'position': 'jobTitle',
+      'city': 'city', 'country': 'country',
+      'linkedin': 'linkedInUrl', 'linkedin url': 'linkedInUrl',
+      'website': 'companyWebsite', 'url': 'companyWebsite',
+    };
+    
+    // Parse each row
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+      const contact: Partial<Contact> = { source: 'vcard_import', tags: [] };
+      
+      header.forEach((col, idx) => {
+        const fieldName = fieldMap[col];
+        if (fieldName && values[idx]) {
+          (contact as any)[fieldName] = values[idx];
+        }
+      });
+      
+      // Only add if we have at least a name or email
+      if (contact.firstName || contact.lastName || contact.emailPrimary) {
+        contacts.push(contact);
+      }
+    }
+    
+    return contacts;
+  };
+
   const parseVCard = (text: string): Partial<Contact> => {
     const contact: Partial<Contact> = { source: 'vcard_import', tags: [] };
     
@@ -175,15 +268,52 @@ function ContactsContent() {
     return contact;
   };
 
+  const parseAllVCards = (text: string): Partial<Contact>[] => {
+    const contacts: Partial<Contact>[] = [];
+    const vcards = text.split(/(?=BEGIN:VCARD)/i);
+    
+    for (const vcard of vcards) {
+      if (vcard.trim().startsWith('BEGIN:VCARD')) {
+        const contact = parseVCard(vcard);
+        // Only add if we have at least a name or email
+        if (contact.firstName || contact.lastName || contact.emailPrimary) {
+          contacts.push(contact);
+        }
+      }
+    }
+    
+    return contacts;
+  };
+
   const handleVCardImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     
     const text = await file.text();
-    const contact = parseVCard(text);
+    let parsedContacts: Partial<Contact>[] = [];
     
-    setFormData(contact);
-    setShowAddForm(true);
+    // Detect file type and parse accordingly
+    if (file.name.endsWith('.csv')) {
+      parsedContacts = parseCSV(text);
+    } else {
+      parsedContacts = parseAllVCards(text);
+    }
+    
+    if (parsedContacts.length === 0) {
+      alert('No contacts found in file. Make sure the file is a valid vCard (.vcf) or CSV file.');
+      return;
+    }
+    
+    if (parsedContacts.length === 1) {
+      // Single contact - open edit form
+      setFormData(parsedContacts[0]);
+      setShowAddForm(true);
+    } else {
+      // Multiple contacts - bulk import
+      setBulkContacts(parsedContacts);
+      setShowBulkImport(true);
+    }
+    
     if (vcardInputRef.current) vcardInputRef.current.value = '';
   };
 
@@ -366,6 +496,68 @@ function ContactsContent() {
         </div>
       )}
 
+      {/* Bulk Import Modal */}
+      {showBulkImport && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 rounded-lg p-4 sm:p-6 max-w-lg w-full border border-zinc-700 max-h-[90vh] overflow-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">📥 Bulk Import ({bulkContacts.length} contacts)</h3>
+              <button onClick={() => { setShowBulkImport(false); setBulkContacts([]); }} className="text-zinc-400 hover:text-white p-2">✕</button>
+            </div>
+            
+            {bulkImporting ? (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-4">⏳</div>
+                <p className="text-lg mb-2">Importing contacts...</p>
+                <p className="text-zinc-400">{bulkProgress.done} / {bulkProgress.total}</p>
+                <div className="w-full bg-zinc-700 rounded-full h-2 mt-4">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all"
+                    style={{ width: `${(bulkProgress.done / bulkProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ) : (
+              <>
+                <p className="text-zinc-400 mb-4">
+                  Review the contacts below. Duplicates will be auto-detected and merged.
+                </p>
+                
+                <div className="max-h-[50vh] overflow-auto space-y-2 mb-4">
+                  {bulkContacts.map((c, i) => (
+                    <div key={i} className="bg-zinc-800 rounded-lg p-3 flex items-center gap-3">
+                      <div className="w-10 h-10 bg-zinc-700 rounded-full flex items-center justify-center text-sm font-medium">
+                        {(c.firstName?.[0] || '')}{(c.lastName?.[0] || '')}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{c.firstName} {c.lastName}</p>
+                        <p className="text-sm text-zinc-400 truncate">{c.emailPrimary || c.phoneMobile || 'No contact info'}</p>
+                      </div>
+                      {c.company && <span className="text-xs text-zinc-500">{c.company}</span>}
+                    </div>
+                  ))}
+                </div>
+                
+                <div className="flex gap-2">
+                  <button
+                    onClick={importBulkContacts}
+                    className="flex-1 bg-green-600 hover:bg-green-700 py-3 rounded-lg font-medium"
+                  >
+                    Import All ({bulkContacts.length})
+                  </button>
+                  <button
+                    onClick={() => { setShowBulkImport(false); setBulkContacts([]); }}
+                    className="bg-zinc-700 hover:bg-zinc-600 px-4 py-3 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-2xl sm:text-3xl font-bold">Contacts</h2>
@@ -387,7 +579,7 @@ function ContactsContent() {
             <input
               ref={vcardInputRef}
               type="file"
-              accept=".vcf,.vcard"
+              accept=".vcf,.vcard,.csv"
               onChange={handleVCardImport}
               className="hidden"
             />
