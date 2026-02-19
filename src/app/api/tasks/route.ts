@@ -7,9 +7,9 @@ interface Task {
   id: string;
   text: string;
   completed: boolean;
-  priority: 'low' | 'medium' | 'high';
+  urgent: boolean;
+  important: boolean;
   created: string;
-  due?: string;
 }
 
 export async function GET() {
