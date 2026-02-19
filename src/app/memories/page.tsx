@@ -193,38 +193,63 @@ function MemoriesContent() {
     setUploading(true);
     
     try {
-      // Read file content
-      const content = await file.text();
+      const reader = new FileReader();
       
-      // Create document in Second Brain
-      const res = await fetch('/api/documents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: file.name,
-          path: file.name,
-          content: content,
-        }),
-      });
-      
-      if (res.ok) {
-        // Refresh documents list
-        await fetchDocuments();
+      reader.onload = async (event) => {
+        const result = event.target?.result;
+        if (!result) return;
         
-        // Auto-attach the new document
-        await toggleAttachment(file.name);
+        // Determine if binary file
+        const isBinary = !file.name.match(/\.(md|txt|json|csv|yaml|yml|js|ts|tsx|jsx|py|html|css|xml)$/i);
+        
+        let content: string;
+        if (isBinary) {
+          // Convert to base64 (remove data URL prefix)
+          content = (result as string).split(',')[1];
+        } else {
+          content = result as string;
+        }
+        
+        try {
+          const res = await fetch('/api/documents', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: file.name,
+              path: file.name,
+              content,
+              isBase64: isBinary,
+            }),
+          });
+          
+          if (res.ok) {
+            await fetchDocuments();
+            await toggleAttachment(file.name);
+          } else {
+            alert('Failed to upload document');
+          }
+        } catch (error) {
+          console.error('Upload error:', error);
+          alert('Failed to upload file');
+        }
+        
+        setUploading(false);
+      };
+      
+      // Read based on file type
+      if (file.name.match(/\.(md|txt|json|csv|yaml|yml|js|ts|tsx|jsx|py|html|css|xml)$/i)) {
+        reader.readAsText(file);
       } else {
-        alert('Failed to upload document');
+        reader.readAsDataURL(file);
       }
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Failed to upload file. Make sure it\'s a text-based file (txt, md, csv, json, etc.)');
-    } finally {
       setUploading(false);
-      // Reset file input
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+    }
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -259,7 +284,7 @@ function MemoriesContent() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.html,.css,.js,.ts,.py,.log"
+                accept="*"
                 onChange={handleFileUpload}
                 className="hidden"
                 id="file-upload"
@@ -275,7 +300,7 @@ function MemoriesContent() {
                     <span className="text-3xl mb-2">📤</span>
                     <span className="text-zinc-400 text-sm text-center">
                       Click to upload a file<br/>
-                      <span className="text-zinc-500 text-xs">(txt, md, csv, json, etc.)</span>
+                      <span className="text-zinc-500 text-xs">(Excel, PowerPoint, PDF, images, text files)</span>
                     </span>
                   </>
                 )}

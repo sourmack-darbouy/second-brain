@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 interface Document {
@@ -9,18 +9,21 @@ interface Document {
   type: string;
   size: number;
   lastModified: string;
+  isBinary?: boolean;
 }
 
 function DocumentsContent() {
   const searchParams = useSearchParams();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
-  const [selectedDoc, setSelectedDoc] = useState<{ path: string; content: string } | null>(null);
+  const [selectedDoc, setSelectedDoc] = useState<{ path: string; content: string; isBase64?: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [newDocName, setNewDocName] = useState('');
   const [newDocContent, setNewDocContent] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   const fetchDocuments = async () => {
     try {
@@ -83,6 +86,70 @@ function DocumentsContent() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setUploading(true);
+    
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const result = event.target?.result;
+        if (!result) return;
+        
+        // Determine if binary file
+        const isBinary = !file.name.match(/\.(md|txt|json|csv|yaml|yml|js|ts|tsx|jsx|py|html|css|xml)$/i);
+        
+        let content: string;
+        if (isBinary) {
+          // Convert to base64
+          content = (result as string).split(',')[1]; // Remove data URL prefix
+        } else {
+          content = result as string;
+        }
+        
+        try {
+          const res = await fetch('/api/documents', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: file.name,
+              path: file.name,
+              content,
+              isBase64: isBinary,
+            }),
+          });
+          
+          if (res.ok) {
+            fetchDocuments();
+          } else {
+            alert('Failed to upload document');
+          }
+        } catch (error) {
+          console.error('Upload error:', error);
+          alert('Failed to upload file');
+        }
+        
+        setUploading(false);
+      };
+      
+      if (file.name.match(/\.(md|txt|json|csv|yaml|yml|js|ts|tsx|jsx|py|html|css|xml)$/i)) {
+        reader.readAsText(file);
+      } else {
+        reader.readAsDataURL(file);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      setUploading(false);
+    }
+    
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   const deleteDocument = async (path: string) => {
     if (!confirm('Delete this document?')) return;
     
@@ -98,6 +165,43 @@ function DocumentsContent() {
     } catch (error) {
       console.error('Failed to delete document:', error);
     }
+  };
+
+  const downloadDocument = (path: string) => {
+    window.open(`/api/documents/${path}?download=true`, '_blank');
+  };
+
+  const openInOffice = (path: string) => {
+    const url = encodeURIComponent(`${window.location.origin}/api/documents/${path}?download=true`);
+    const ext = path.split('.').pop()?.toLowerCase();
+    
+    let protocol = '';
+    if (ext === 'xlsx' || ext === 'xls') {
+      protocol = 'ms-excel';
+    } else if (ext === 'pptx' || ext === 'ppt') {
+      protocol = 'ms-powerpoint';
+    } else if (ext === 'docx' || ext === 'doc') {
+      protocol = 'ms-word';
+    }
+    
+    if (protocol) {
+      window.location.href = `${protocol}:ofe|u|${url}`;
+    } else {
+      downloadDocument(path);
+    }
+  };
+
+  const getFileIcon = (filename: string) => {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    const icons: Record<string, string> = {
+      'xlsx': '📊', 'xls': '📊', 'csv': '📊',
+      'pptx': '📽️', 'ppt': '📽️',
+      'docx': '📝', 'doc': '📝',
+      'pdf': '📄',
+      'png': '🖼️', 'jpg': '🖼️', 'jpeg': '🖼️', 'gif': '🖼️',
+      'md': '📝', 'txt': '📝',
+    };
+    return icons[ext] || '📄';
   };
 
   const formatSize = (bytes: number) => {
@@ -121,11 +225,24 @@ function DocumentsContent() {
           >
             📂
           </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={handleFileUpload}
+            className="hidden"
+            id="file-upload-docs"
+          />
+          <label
+            htmlFor="file-upload-docs"
+            className={`bg-green-600 hover:bg-green-700 px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm sm:text-base cursor-pointer ${uploading ? 'opacity-50' : ''}`}
+          >
+            {uploading ? 'Uploading...' : '+ Upload'}
+          </label>
           <button
             onClick={() => setShowAddForm(!showAddForm)}
-            className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm sm:text-base"
+            className="bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm sm:text-base"
           >
-            {showAddForm ? 'Cancel' : '+ Add'}
+            {showAddForm ? 'Cancel' : '+ Text'}
           </button>
         </div>
       </div>
@@ -195,9 +312,12 @@ function DocumentsContent() {
                       : 'hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate">{doc.name}</span>
-                    <span className="text-zinc-500 text-xs flex-shrink-0">{formatSize(doc.size)}</span>
+                  <div className="flex items-center gap-2">
+                    <span>{getFileIcon(doc.name)}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate">{doc.name}</div>
+                      <div className="text-xs text-zinc-500">{formatSize(doc.size)}</div>
+                    </div>
                   </div>
                 </button>
               ))}
@@ -211,22 +331,49 @@ function DocumentsContent() {
             <div>
               <div className="flex items-center justify-between gap-2 mb-3 sm:mb-4">
                 <h3 className="text-lg sm:text-xl font-semibold truncate">{selectedDoc.path}</h3>
-                <button
-                  onClick={() => deleteDocument(selectedDoc.path)}
-                  className="text-red-400 hover:text-red-300 text-sm bg-zinc-800 px-3 py-1.5 rounded-lg flex-shrink-0"
-                >
-                  Delete
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {selectedDoc.isBase64 ? (
+                    <>
+                      <button
+                        onClick={() => openInOffice(selectedDoc.path)}
+                        className="bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg text-white text-sm"
+                      >
+                        Open
+                      </button>
+                      <button
+                        onClick={() => downloadDocument(selectedDoc.path)}
+                        className="bg-zinc-700 hover:bg-zinc-600 px-3 py-1.5 rounded-lg text-zinc-300 text-sm"
+                      >
+                        Download
+                      </button>
+                    </>
+                  ) : null}
+                  <button
+                    onClick={() => deleteDocument(selectedDoc.path)}
+                    className="text-red-400 hover:text-red-300 text-sm bg-zinc-800 px-3 py-1.5 rounded-lg"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
-              <pre className="whitespace-pre-wrap text-zinc-300 font-mono text-sm bg-zinc-950 p-3 sm:p-4 rounded-lg border border-zinc-800 overflow-auto max-h-[60vh] sm:max-h-[70vh]">
-                {selectedDoc.content || '(empty)'}
-              </pre>
+              
+              {selectedDoc.isBase64 ? (
+                <div className="text-zinc-400 text-center py-8 sm:py-12 bg-zinc-950 rounded-lg border border-zinc-800">
+                  <div className="text-4xl mb-3">{getFileIcon(selectedDoc.path)}</div>
+                  <p className="mb-2">Binary file - cannot display content</p>
+                  <p className="text-sm text-zinc-500">Click "Open" to open in Office or "Download" to save</p>
+                </div>
+              ) : (
+                <pre className="whitespace-pre-wrap text-zinc-300 font-mono text-sm bg-zinc-950 p-3 sm:p-4 rounded-lg border border-zinc-800 overflow-auto max-h-[60vh] sm:max-h-[70vh]">
+                  {selectedDoc.content || '(empty)'}
+                </pre>
+              )}
             </div>
           ) : (
             <div className="text-zinc-400 text-center py-8 sm:py-12 text-sm sm:text-base">
               {documents.length === 0 
-                ? 'Add your first document to get started'
-                : 'Select a document to view its contents'}
+                ? 'Upload your first document to get started'
+                : 'Select a document to view'}
             </div>
           )}
         </div>
