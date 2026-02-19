@@ -55,6 +55,9 @@ function Header() {
           <a href="/documents" className="text-zinc-400 hover:text-zinc-100 transition text-sm lg:text-base">
             Documents
           </a>
+          <a href="/contacts" className="text-zinc-400 hover:text-zinc-100 transition text-sm lg:text-base">
+            Contacts
+          </a>
           <a href="/tasks" className="text-zinc-400 hover:text-zinc-100 transition text-sm lg:text-base">
             Tasks
           </a>
@@ -97,6 +100,13 @@ function MobileNav() {
         title="Documents"
       >
         📄
+      </a>
+      <a 
+        href="/contacts" 
+        className="p-2 rounded-lg hover:bg-zinc-800 transition"
+        title="Contacts"
+      >
+        👥
       </a>
     </div>
   );
