@@ -171,9 +171,27 @@ function DocumentsContent() {
     window.open(`/api/documents/${path}?download=true`, '_blank');
   };
 
-  const openInOffice = (path: string) => {
-    // Simple download - works everywhere
-    window.open(`/api/documents/${path}?download=true`, '_blank');
+  const openInOffice = async (path: string) => {
+    // Fetch the file and create a blob URL
+    try {
+      const res = await fetch(`/api/documents/${path}?download=true`);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      
+      // Open in new window - browser will either:
+      // 1. Open in Office Online viewer (if available)
+      // 2. Download and offer to open with Excel (Windows)
+      // 3. Show in browser (PDF, images)
+      const newWindow = window.open(blobUrl, '_blank');
+      
+      // If popup blocked, fallback to download
+      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        window.location.href = blobUrl;
+      }
+    } catch (error) {
+      console.error('Failed to open file:', error);
+      alert('Failed to open file. Try Download instead.');
+    }
   };
 
   const getFileIcon = (filename: string) => {
@@ -318,12 +336,20 @@ function DocumentsContent() {
                 <h3 className="text-lg sm:text-xl font-semibold truncate">{selectedDoc.path}</h3>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {selectedDoc.isBase64 && (
-                    <button
-                      onClick={() => openInOffice(selectedDoc.path)}
-                      className="bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg text-white text-sm"
-                    >
-                      Download
-                    </button>
+                    <>
+                      <button
+                        onClick={() => openInOffice(selectedDoc.path)}
+                        className="bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg text-white text-sm"
+                      >
+                        Open
+                      </button>
+                      <button
+                        onClick={() => downloadDocument(selectedDoc.path)}
+                        className="bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg text-white text-sm"
+                      >
+                        Download
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={() => deleteDocument(selectedDoc.path)}
@@ -338,7 +364,7 @@ function DocumentsContent() {
                 <div className="text-zinc-400 text-center py-8 sm:py-12 bg-zinc-950 rounded-lg border border-zinc-800">
                   <div className="text-4xl mb-3">{getFileIcon(selectedDoc.path)}</div>
                   <p className="mb-2">Binary file - cannot display content</p>
-                  <p className="text-sm text-zinc-500">Click "Download" to save, then open locally</p>
+                  <p className="text-sm text-zinc-500">Click "Open" to view in browser or "Download" to save</p>
                 </div>
               ) : (
                 <pre className="whitespace-pre-wrap text-zinc-300 font-mono text-sm bg-zinc-950 p-3 sm:p-4 rounded-lg border border-zinc-800 overflow-auto max-h-[60vh] sm:max-h-[70vh]">
