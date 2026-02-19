@@ -172,39 +172,21 @@ function DocumentsContent() {
   };
 
   const openInOffice = (path: string) => {
-    // Build public URL for the file (Office needs publicly accessible URL)
+    // Use Microsoft Office Online viewer - works everywhere
     const publicUrl = `${window.location.origin}/api/public/file?path=${encodeURIComponent(path)}&token=sb2024pub`;
     const ext = path.split('.').pop()?.toLowerCase();
     
-    // Use Microsoft Office protocols
-    let officeUrl = '';
-    if (ext === 'xlsx' || ext === 'xls') {
-      // Excel: ofv = open for view, ofe = open for edit
-      officeUrl = `ms-excel:ofv|u|${encodeURIComponent(publicUrl)}`;
-    } else if (ext === 'pptx' || ext === 'ppt') {
-      officeUrl = `ms-powerpoint:ofv|u|${encodeURIComponent(publicUrl)}`;
-    } else if (ext === 'docx' || ext === 'doc') {
-      officeUrl = `ms-word:ofv|u|${encodeURIComponent(publicUrl)}`;
-    } else if (ext === 'pdf') {
-      // PDF can open in browser
+    if (ext === 'pdf') {
+      // PDF opens directly in browser
       window.open(publicUrl, '_blank');
-      return;
+    } else if (['xlsx', 'xls', 'pptx', 'ppt', 'docx', 'doc'].includes(ext || '')) {
+      // Use Office Online viewer
+      const viewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(publicUrl)}`;
+      window.open(viewerUrl, '_blank');
     } else {
       // Unknown type, just download
       downloadDocument(path);
-      return;
     }
-    
-    // Try to open with Office protocol
-    window.location.href = officeUrl;
-    
-    // Fallback after delay if Office didn't launch
-    setTimeout(() => {
-      if (confirm('Did Office open? If not, would you like to download the file instead?')) {
-        // User clicked OK (meaning Office didn't open)
-        downloadDocument(path);
-      }
-    }, 3000);
   };
 
   const getFileIcon = (filename: string) => {
@@ -377,7 +359,7 @@ function DocumentsContent() {
                 <div className="text-zinc-400 text-center py-8 sm:py-12 bg-zinc-950 rounded-lg border border-zinc-800">
                   <div className="text-4xl mb-3">{getFileIcon(selectedDoc.path)}</div>
                   <p className="mb-2">Binary file - cannot display content</p>
-                  <p className="text-sm text-zinc-500">"Open" launches Excel/Word/PowerPoint • "Download" saves file</p>
+                  <p className="text-sm text-zinc-500">"Open" views in browser • "Download" saves to device</p>
                 </div>
               ) : (
                 <pre className="whitespace-pre-wrap text-zinc-300 font-mono text-sm bg-zinc-950 p-3 sm:p-4 rounded-lg border border-zinc-800 overflow-auto max-h-[60vh] sm:max-h-[70vh]">
