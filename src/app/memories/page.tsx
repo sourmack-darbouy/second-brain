@@ -9,17 +9,29 @@ interface Memory {
   content: string;
   lastModified: string;
   type: 'long-term' | 'daily';
+  attachments?: string[];
+}
+
+interface Document {
+  name: string;
+  path: string;
+  type: string;
+  size: number;
+  lastModified: string;
 }
 
 function MemoriesContent() {
   const searchParams = useSearchParams();
   const [memories, setMemories] = useState<Memory[]>([]);
+  const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showAttachModal, setShowAttachModal] = useState(false);
+  const [memoryAttachments, setMemoryAttachments] = useState<string[]>([]);
 
   const fetchMemories = async () => {
     try {
@@ -33,10 +45,12 @@ function MemoriesContent() {
         if (mem) {
           setSelectedMemory(mem);
           setEditContent(mem.content);
+          setMemoryAttachments(mem.attachments || []);
         }
       } else if (data.memories?.length > 0) {
         setSelectedMemory(data.memories[0]);
         setEditContent(data.memories[0].content);
+        setMemoryAttachments(data.memories[0].attachments || []);
       }
     } catch (error) {
       console.error('Failed to fetch memories:', error);
@@ -45,13 +59,25 @@ function MemoriesContent() {
     }
   };
 
+  const fetchDocuments = async () => {
+    try {
+      const res = await fetch('/api/documents');
+      const data = await res.json();
+      setDocuments(data.documents || []);
+    } catch (error) {
+      console.error('Failed to fetch documents:', error);
+    }
+  };
+
   useEffect(() => {
     fetchMemories();
+    fetchDocuments();
   }, [searchParams]);
 
   const selectMemory = (mem: Memory) => {
     setSelectedMemory(mem);
     setEditContent(mem.content);
+    setMemoryAttachments(mem.attachments || []);
     setEditing(false);
     setShowSidebar(false);
   };
@@ -68,10 +94,11 @@ function MemoriesContent() {
           path: selectedMemory.path,
           content: editContent,
           type: selectedMemory.type,
+          attachments: memoryAttachments,
         }),
       });
       
-      setSelectedMemory({ ...selectedMemory, content: editContent });
+      setSelectedMemory({ ...selectedMemory, content: editContent, attachments: memoryAttachments });
       setEditing(false);
       fetchMemories();
     } catch (error) {
@@ -109,12 +136,123 @@ function MemoriesContent() {
     }
   };
 
+  const deleteMemory = async () => {
+    if (!selectedMemory) return;
+    
+    if (selectedMemory.type === 'long-term') {
+      alert('Cannot delete long-term memory');
+      return;
+    }
+    
+    if (!confirm(`Delete memory "${selectedMemory.name}"? This cannot be undone.`)) return;
+    
+    try {
+      await fetch('/api/memories', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: selectedMemory.path }),
+      });
+      
+      setSelectedMemory(null);
+      fetchMemories();
+    } catch (error) {
+      console.error('Failed to delete memory:', error);
+    }
+  };
+
+  const toggleAttachment = async (docPath: string) => {
+    const isAttached = memoryAttachments.includes(docPath);
+    const newAttachments = isAttached
+      ? memoryAttachments.filter(p => p !== docPath)
+      : [...memoryAttachments, docPath];
+    
+    setMemoryAttachments(newAttachments);
+    
+    // Save to backend
+    try {
+      await fetch('/api/memories', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memoryPath: selectedMemory?.path,
+          documentPath: docPath,
+          action: isAttached ? 'detach' : 'attach',
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to update attachment:', error);
+    }
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   if (loading) {
     return <div className="text-zinc-400">Loading memories...</div>;
   }
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Attach Document Modal */}
+      {showAttachModal && selectedMemory && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 rounded-lg p-4 sm:p-6 max-w-lg w-full max-h-[80vh] overflow-auto border border-zinc-700">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Attach Documents</h3>
+              <button
+                onClick={() => setShowAttachModal(false)}
+                className="text-zinc-400 hover:text-white p-2"
+              >
+                ✕
+              </button>
+            </div>
+            
+            {documents.length === 0 ? (
+              <div className="text-zinc-400 text-center py-8">
+                No documents available. Add some in the Documents section first.
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {documents.map(doc => {
+                  const isAttached = memoryAttachments.includes(doc.path);
+                  return (
+                    <button
+                      key={doc.path}
+                      onClick={() => toggleAttachment(doc.path)}
+                      className={`w-full text-left px-4 py-3 rounded-lg transition flex items-center justify-between gap-3 ${
+                        isAttached
+                          ? 'bg-blue-600/20 border border-blue-500 text-blue-300'
+                          : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-lg">{isAttached ? '✓' : '📄'}</span>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium">{doc.name}</div>
+                          <div className="text-xs text-zinc-500">{doc.type} • {formatSize(doc.size)}</div>
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            
+            <div className="mt-4 pt-4 border-t border-zinc-700 flex justify-end gap-2">
+              <button
+                onClick={() => setShowAttachModal(false)}
+                className="bg-zinc-700 hover:bg-zinc-600 px-4 py-2 rounded-lg text-sm"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    
       <div className="flex items-center justify-between gap-2">
         <h2 className="text-2xl sm:text-3xl font-bold">Memories</h2>
         <div className="flex gap-2">
@@ -137,7 +275,7 @@ function MemoriesContent() {
         {/* Sidebar - Hidden on mobile unless toggled */}
         <div className={`
           lg:col-span-1 bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800
-          fixed inset-0 z-50 bg-zinc-950/95 lg:bg-transparent lg:static lg:z-auto
+          fixed inset-0 z-40 bg-zinc-950/95 lg:bg-transparent lg:static lg:z-auto
           ${showSidebar ? 'block' : 'hidden lg:block'}
         `}>
           <div className="flex items-center justify-between mb-3">
@@ -168,6 +306,9 @@ function MemoriesContent() {
                   <div className="flex items-center gap-2">
                     <span>{mem.type === 'long-term' ? '🧠' : '📅'}</span>
                     <span className="truncate">{mem.name}</span>
+                    {mem.attachments && mem.attachments.length > 0 && (
+                      <span className="text-xs text-zinc-500">📎{mem.attachments.length}</span>
+                    )}
                   </div>
                 </button>
               ))}
@@ -181,23 +322,48 @@ function MemoriesContent() {
             <div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-3 sm:mb-4">
                 <h3 className="text-lg sm:text-xl font-semibold">{selectedMemory.name}</h3>
-                <div className="flex items-center gap-2 sm:gap-4">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-zinc-400 text-xs sm:text-sm hidden sm:block">
                     {new Date(selectedMemory.lastModified).toLocaleString()}
                   </span>
+                  
+                  {/* Attach button */}
+                  <button
+                    onClick={() => setShowAttachModal(true)}
+                    className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-purple-400 text-sm flex items-center gap-1"
+                  >
+                    📎 <span className="hidden sm:inline">Attach</span>
+                    {memoryAttachments.length > 0 && (
+                      <span className="bg-purple-600 text-white text-xs px-1.5 rounded-full">
+                        {memoryAttachments.length}
+                      </span>
+                    )}
+                  </button>
+                  
                   {!editing ? (
-                    <button
-                      onClick={() => setEditing(true)}
-                      className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-blue-400 text-sm"
-                    >
-                      Edit
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setEditing(true)}
+                        className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-blue-400 text-sm"
+                      >
+                        Edit
+                      </button>
+                      {selectedMemory.type !== 'long-term' && (
+                        <button
+                          onClick={deleteMemory}
+                          className="bg-zinc-800 hover:bg-red-900 px-3 py-1.5 rounded-lg text-red-400 text-sm"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </>
                   ) : (
                     <div className="flex gap-2">
                       <button
                         onClick={() => {
                           setEditing(false);
                           setEditContent(selectedMemory.content);
+                          setMemoryAttachments(selectedMemory.attachments || []);
                         }}
                         className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-zinc-400 text-sm"
                       >
@@ -214,6 +380,26 @@ function MemoriesContent() {
                   )}
                 </div>
               </div>
+              
+              {/* Attachments display */}
+              {memoryAttachments.length > 0 && (
+                <div className="mb-4 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
+                  <div className="text-xs text-zinc-400 mb-2">Attached Documents:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {memoryAttachments.map(path => {
+                      const doc = documents.find(d => d.path === path);
+                      return (
+                        <span
+                          key={path}
+                          className="bg-zinc-700 px-2 py-1 rounded text-sm text-zinc-300 flex items-center gap-1"
+                        >
+                          📎 {doc?.name || path}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               
               {editing ? (
                 <textarea
