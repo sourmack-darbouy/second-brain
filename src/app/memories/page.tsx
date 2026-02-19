@@ -19,6 +19,7 @@ function MemoriesContent() {
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(false);
 
   const fetchMemories = async () => {
     try {
@@ -26,7 +27,6 @@ function MemoriesContent() {
       const data = await res.json();
       setMemories(data.memories || []);
       
-      // Check if a specific file was requested
       const filePath = searchParams.get('file');
       if (filePath) {
         const mem = (data.memories || []).find((m: Memory) => m.path === filePath);
@@ -53,6 +53,7 @@ function MemoriesContent() {
     setSelectedMemory(mem);
     setEditContent(mem.content);
     setEditing(false);
+    setShowSidebar(false);
   };
 
   const saveMemory = async () => {
@@ -113,35 +114,55 @@ function MemoriesContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold">Memories</h2>
-        <button
-          onClick={createDailyNote}
-          className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded font-medium transition"
-        >
-          + Today's Note
-        </button>
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-2xl sm:text-3xl font-bold">Memories</h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowSidebar(!showSidebar)}
+            className="sm:hidden bg-zinc-800 px-3 py-2 rounded-lg font-medium transition"
+          >
+            📂
+          </button>
+          <button
+            onClick={createDailyNote}
+            className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm sm:text-base"
+          >
+            + Today
+          </button>
+        </div>
       </div>
       
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Sidebar */}
-        <div className="lg:col-span-1 bg-zinc-900 rounded-lg p-4 border border-zinc-800">
-          <h3 className="font-semibold mb-3 text-zinc-300">
-            Your Memories ({memories.length})
-          </h3>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
+        {/* Sidebar - Hidden on mobile unless toggled */}
+        <div className={`
+          lg:col-span-1 bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800
+          fixed inset-0 z-50 bg-zinc-950/95 lg:bg-transparent lg:static lg:z-auto
+          ${showSidebar ? 'block' : 'hidden lg:block'}
+        `}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-zinc-300 text-sm sm:text-base">
+              Your Memories ({memories.length})
+            </h3>
+            <button
+              onClick={() => setShowSidebar(false)}
+              className="lg:hidden text-zinc-400 p-2"
+            >
+              ✕
+            </button>
+          </div>
           {memories.length === 0 ? (
             <p className="text-zinc-500 text-sm">No memories yet. Chat with Alfred to build them!</p>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-[60vh] lg:max-h-[70vh] overflow-auto">
               {memories.map(mem => (
                 <button
                   key={mem.path}
                   onClick={() => selectMemory(mem)}
-                  className={`w-full text-left px-3 py-2 rounded transition ${
+                  className={`w-full text-left px-3 py-2 rounded-lg transition text-sm ${
                     selectedMemory?.path === mem.path 
                       ? 'bg-blue-600 text-white' 
-                      : 'hover:bg-zinc-800 text-zinc-300'
+                      : 'hover:bg-zinc-800 active:bg-zinc-700 text-zinc-300'
                   }`}
                 >
                   <div className="flex items-center gap-2">
@@ -155,19 +176,19 @@ function MemoriesContent() {
         </div>
 
         {/* Content */}
-        <div className="lg:col-span-3 bg-zinc-900 rounded-lg p-6 border border-zinc-800">
+        <div className="lg:col-span-3 bg-zinc-900 rounded-lg p-3 sm:p-6 border border-zinc-800">
           {selectedMemory ? (
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold">{selectedMemory.name}</h3>
-                <div className="flex items-center gap-4">
-                  <span className="text-zinc-400 text-sm">
-                    Last modified: {new Date(selectedMemory.lastModified).toLocaleString()}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-3 sm:mb-4">
+                <h3 className="text-lg sm:text-xl font-semibold">{selectedMemory.name}</h3>
+                <div className="flex items-center gap-2 sm:gap-4">
+                  <span className="text-zinc-400 text-xs sm:text-sm hidden sm:block">
+                    {new Date(selectedMemory.lastModified).toLocaleString()}
                   </span>
                   {!editing ? (
                     <button
                       onClick={() => setEditing(true)}
-                      className="text-blue-400 hover:text-blue-300"
+                      className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-blue-400 text-sm"
                     >
                       Edit
                     </button>
@@ -178,14 +199,14 @@ function MemoriesContent() {
                           setEditing(false);
                           setEditContent(selectedMemory.content);
                         }}
-                        className="text-zinc-400 hover:text-zinc-300"
+                        className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-zinc-400 text-sm"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={saveMemory}
                         disabled={saving}
-                        className="text-green-400 hover:text-green-300"
+                        className="bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg text-white text-sm"
                       >
                         {saving ? 'Saving...' : 'Save'}
                       </button>
@@ -198,16 +219,16 @@ function MemoriesContent() {
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded p-4 text-zinc-300 font-mono text-sm min-h-[60vh]"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 sm:p-4 text-zinc-300 font-mono text-sm min-h-[50vh] sm:min-h-[60vh]"
                 />
               ) : (
-                <pre className="whitespace-pre-wrap text-zinc-300 font-mono text-sm bg-zinc-950 p-4 rounded border border-zinc-800 overflow-auto max-h-[70vh]">
+                <pre className="whitespace-pre-wrap text-zinc-300 font-mono text-sm bg-zinc-950 p-3 sm:p-4 rounded-lg border border-zinc-800 overflow-auto max-h-[60vh] sm:max-h-[70vh]">
                   {selectedMemory.content || '(empty)'}
                 </pre>
               )}
             </div>
           ) : (
-            <div className="text-zinc-400 text-center py-12">
+            <div className="text-zinc-400 text-center py-8 sm:py-12">
               No memories yet. Start by chatting with Alfred!
             </div>
           )}
