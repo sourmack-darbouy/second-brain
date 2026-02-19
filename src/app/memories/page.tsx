@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 interface Memory {
@@ -22,6 +22,7 @@ interface Document {
 
 function MemoriesContent() {
   const searchParams = useSearchParams();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [memories, setMemories] = useState<Memory[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [selectedMemory, setSelectedMemory] = useState<Memory | null>(null);
@@ -32,6 +33,7 @@ function MemoriesContent() {
   const [showSidebar, setShowSidebar] = useState(false);
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [memoryAttachments, setMemoryAttachments] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   const fetchMemories = async () => {
     try {
@@ -184,6 +186,48 @@ function MemoriesContent() {
     }
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setUploading(true);
+    
+    try {
+      // Read file content
+      const content = await file.text();
+      
+      // Create document in Second Brain
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: file.name,
+          path: file.name,
+          content: content,
+        }),
+      });
+      
+      if (res.ok) {
+        // Refresh documents list
+        await fetchDocuments();
+        
+        // Auto-attach the new document
+        await toggleAttachment(file.name);
+      } else {
+        alert('Failed to upload document');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Failed to upload file. Make sure it\'s a text-based file (txt, md, csv, json, etc.)');
+    } finally {
+      setUploading(false);
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -210,12 +254,42 @@ function MemoriesContent() {
               </button>
             </div>
             
+            {/* Upload Section */}
+            <div className="mb-4 p-4 border-2 border-dashed border-zinc-700 rounded-lg hover:border-zinc-500 transition">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".txt,.md,.csv,.json,.yaml,.yml,.xml,.html,.css,.js,.ts,.py,.log"
+                onChange={handleFileUpload}
+                className="hidden"
+                id="file-upload"
+              />
+              <label
+                htmlFor="file-upload"
+                className={`flex flex-col items-center justify-center cursor-pointer py-4 ${uploading ? 'opacity-50' : ''}`}
+              >
+                {uploading ? (
+                  <span className="text-zinc-400">Uploading...</span>
+                ) : (
+                  <>
+                    <span className="text-3xl mb-2">📤</span>
+                    <span className="text-zinc-400 text-sm text-center">
+                      Click to upload a file<br/>
+                      <span className="text-zinc-500 text-xs">(txt, md, csv, json, etc.)</span>
+                    </span>
+                  </>
+                )}
+              </label>
+            </div>
+            
+            <div className="text-xs text-zinc-500 mb-3 uppercase tracking-wider">Or select existing:</div>
+            
             {documents.length === 0 ? (
-              <div className="text-zinc-400 text-center py-8">
-                No documents available. Add some in the Documents section first.
+              <div className="text-zinc-500 text-center py-4 text-sm">
+                No existing documents
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 max-h-[40vh] overflow-auto">
                 {documents.map(doc => {
                   const isAttached = memoryAttachments.includes(doc.path);
                   return (
