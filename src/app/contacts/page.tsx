@@ -861,14 +861,23 @@ function ContactsContent() {
           {filteredContacts.map(contact => (
             <div
               key={contact.id}
-              className={`bg-zinc-900 rounded-lg p-4 border transition relative ${
+              onClick={(e) => {
+                if (mergeMode) {
+                  toggleMergeSelect(contact.id);
+                } else {
+                  setSelectedContact(contact);
+                  setFormData(contact);
+                  setEditMode(true);
+                  setShowAddForm(true);
+                }
+              }}
+              className={`bg-zinc-900 rounded-lg p-4 border transition relative cursor-pointer hover:border-zinc-600 ${
                 mergeMode && selectedForMerge.includes(contact.id) 
                   ? 'border-purple-500 ring-2 ring-purple-500/30' 
                   : contact.status === 'duplicate' 
                     ? 'border-yellow-600' 
                     : 'border-zinc-800'
-              } ${mergeMode ? 'cursor-pointer' : ''} hover:border-zinc-600`}
-              onClick={mergeMode ? () => toggleMergeSelect(contact.id) : undefined}
+              }`}
             >
               {/* Delete button (always visible) */}
               <button
