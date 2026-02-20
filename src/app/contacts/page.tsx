@@ -69,6 +69,7 @@ function ContactsContent() {
   const [ocrScanning, setOcrScanning] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [extractedData, setExtractedData] = useState<Partial<Contact> | null>(null);
+  const [aiScanning, setAiScanning] = useState(false);
 
   // Parse business card text to extract contact info
   const parseBusinessCardText = (text: string): Partial<Contact> => {
@@ -205,6 +206,63 @@ function ContactsContent() {
     } finally {
       setOcrScanning(false);
       setOcrProgress(0);
+    }
+  };
+
+  // Run AI analysis on captured image (uses OpenAI Vision)
+  const runAIAnalysis = async (imageData: string) => {
+    const apiKey = localStorage.getItem('openai_api_key');
+    
+    if (!apiKey) {
+      const key = prompt('Enter your OpenAI API key (will be saved locally):\n\nGet one at: platform.openai.com/api-keys');
+      if (!key) return;
+      localStorage.setItem('openai_api_key', key);
+    }
+    
+    setAiScanning(true);
+    
+    try {
+      const response = await fetch('/api/scan-card', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          image: imageData, 
+          apiKey: localStorage.getItem('openai_api_key') 
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.error || 'AI analysis failed');
+      }
+      
+      console.log('AI extracted:', result.data);
+      setExtractedData(result.data);
+      
+      // Update form with AI-extracted data
+      setFormData({
+        firstName: result.data.firstName || '',
+        lastName: result.data.lastName || '',
+        emailPrimary: result.data.emailPrimary || '',
+        phoneMobile: result.data.phoneMobile || '',
+        company: result.data.company || '',
+        jobTitle: result.data.jobTitle || '',
+        companyWebsite: result.data.companyWebsite || '',
+        linkedInUrl: result.data.linkedInUrl || '',
+        city: result.data.city || '',
+        country: result.data.country || '',
+        source: 'business_card',
+        tags: [],
+        relationshipStrength: 'warm',
+        doNotContact: false
+      });
+      
+    } catch (error) {
+      console.error('AI Analysis Error:', error);
+      alert(error instanceof Error ? error.message : 'AI analysis failed');
+    } finally {
+      setAiScanning(false);
     }
   };
 
@@ -604,9 +662,9 @@ function ContactsContent() {
 
       {/* Scanner Modal */}
       {showScanner && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 rounded-lg p-4 sm:p-6 max-w-md w-full border border-zinc-700">
-            <div className="flex items-center justify-between mb-4">
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-zinc-900 rounded-lg p-4 sm:p-6 max-w-md w-full border border-zinc-700 my-4 sm:my-0 max-h-[95vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4 sticky top-0 bg-zinc-900 pb-2 z-10">
               <h3 className="text-lg font-semibold">
                 {scannerMode === 'card' ? '📷 Scan Business Card' : '📱 Scan QR Code'}
               </h3>
@@ -662,22 +720,38 @@ function ContactsContent() {
                         <p>💼 {extractedData.jobTitle}</p>
                       )}
                       {!extractedData.firstName && !extractedData.emailPrimary && !extractedData.phoneMobile && !extractedData.company && (
-                        <p className="text-yellow-400">⚠️ No data detected - please enter manually</p>
+                        <p className="text-yellow-400">⚠️ Limited data - try AI scan</p>
                       )}
                     </div>
                   </div>
                 )}
-                <button
-                  onClick={() => { 
-                    setCapturedImage(null); 
-                    setExtractedData(null);
-                    setOcrScanning(false);
-                    setFormData({ firstName: '', lastName: '', emailPrimary: '', tags: [], source: 'business_card', relationshipStrength: 'warm', doNotContact: false });
-                  }}
-                  className="w-full bg-zinc-700 hover:bg-zinc-600 py-2 rounded-lg mb-3"
-                >
-                  🔄 Retake Photo
-                </button>
+                
+                {aiScanning ? (
+                  <div className="text-center py-4 mb-3">
+                    <div className="animate-spin text-2xl mb-2">🤖</div>
+                    <p className="text-zinc-300">AI analyzing card...</p>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      onClick={() => runAIAnalysis(capturedImage)}
+                      className="flex-1 bg-purple-600 hover:bg-purple-700 py-2 rounded-lg text-sm font-medium"
+                    >
+                      🤖 AI Scan
+                    </button>
+                    <button
+                      onClick={() => { 
+                        setCapturedImage(null); 
+                        setExtractedData(null);
+                        setOcrScanning(false);
+                        setFormData({ firstName: '', lastName: '', emailPrimary: '', tags: [], source: 'business_card', relationshipStrength: 'warm', doNotContact: false });
+                      }}
+                      className="flex-1 bg-zinc-700 hover:bg-zinc-600 py-2 rounded-lg text-sm"
+                    >
+                      🔄 Retake
+                    </button>
+                  </div>
+                )}
               </div>
             ) : ocrScanning ? (
               <div className="mb-4 text-center py-8">
@@ -812,7 +886,7 @@ function ContactsContent() {
               />
             </div>
             
-            <div className="flex gap-2">
+            <div className="flex gap-2 sticky bottom-0 bg-zinc-900 py-3 -mx-4 px-4 sm:-mx-6 sm:px-6 border-t border-zinc-700 mt-4">
               <button
                 onClick={() => {
                   setShowScanner(false);
