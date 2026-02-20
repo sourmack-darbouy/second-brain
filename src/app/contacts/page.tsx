@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, Suspense } from 'react';
+import Tesseract from 'tesseract.js';
 
 interface Contact {
   id: string;
@@ -65,6 +66,133 @@ function ContactsContent() {
   const [mergeMode, setMergeMode] = useState(false);
   const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [ocrScanning, setOcrScanning] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState(0);
+
+  // Parse business card text to extract contact info
+  const parseBusinessCardText = (text: string): Partial<Contact> => {
+    const contact: Partial<Contact> = { source: 'business_card', tags: [] };
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+    
+    // Email regex
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+    const emails = text.match(emailRegex);
+    if (emails && emails.length > 0) {
+      contact.emailPrimary = emails[0];
+    }
+    
+    // Phone regex (various formats)
+    const phoneRegex = /(?:\+?(\d{1,3}))?[-. (]*(\d{3})[-. )]*(\d{3})[-. ]*(\d{4})|\+?\d[\d\s\-\(\)]{8,}\d/g;
+    const phones = text.match(phoneRegex);
+    if (phones && phones.length > 0) {
+      // Clean up phone number
+      let phone = phones[0].replace(/[^\d+]/g, '');
+      if (phone.length > 8) {
+        contact.phoneMobile = phone;
+      }
+    }
+    
+    // Website regex
+    const websiteRegex = /(?:https?:\/\/)?(?:www\.)?([a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:\/[^\s]*)?)/g;
+    const websites = text.match(websiteRegex);
+    if (websites) {
+      const site = websites.find(w => !w.includes('@') && !w.includes('linkedin'));
+      if (site) {
+        contact.companyWebsite = site.startsWith('http') ? site : `https://${site}`;
+      }
+    }
+    
+    // LinkedIn
+    const linkedinMatch = text.match(/linkedin\.com\/in\/([a-zA-Z0-9-]+)/i);
+    if (linkedinMatch) {
+      contact.linkedInUrl = `https://linkedin.com/in/${linkedinMatch[1]}`;
+    }
+    
+    // Name detection - usually one of the first lines, often larger font
+    // Look for 2-3 word lines near the top that could be a name
+    for (let i = 0; i < Math.min(5, lines.length); i++) {
+      const line = lines[i];
+      // Skip if it looks like a company, title, or contains numbers/special chars
+      if (line.match(/(?:inc|ltd|corp|llc|pty|gmbh|co\.|company|enterprise)/i)) continue;
+      if (line.match(/(?:director|manager|engineer|executive|officer|head|lead|senior|chief|president|vp)/i)) continue;
+      if (line.match(/[@\d]/)) continue;
+      
+      // Check if it looks like a name (2-3 capitalized words)
+      const words = line.split(/\s+/);
+      if (words.length >= 2 && words.length <= 4) {
+        const isName = words.every(w => /^[A-Z][a-z]+$/.test(w));
+        if (isName) {
+          contact.firstName = words[0];
+          contact.lastName = words.slice(1).join(' ');
+          break;
+        }
+      }
+    }
+    
+    // Job title detection
+    const titleKeywords = ['director', 'manager', 'engineer', 'executive', 'officer', 'head', 'lead', 'senior', 'chief', 'president', 'vp', 'vice', 'consultant', 'specialist', 'analyst', 'developer', 'architect', 'coordinator', 'administrator'];
+    for (const line of lines) {
+      const lower = line.toLowerCase();
+      if (titleKeywords.some(kw => lower.includes(kw))) {
+        contact.jobTitle = line;
+        break;
+      }
+    }
+    
+    // Company detection - look for Inc, Ltd, Corp, etc or common patterns
+    const companyPatterns = [
+      /([A-Z][A-Za-z0-9\s&]+(?:Inc|LLC|Ltd|Corp|Pty|GmbH|Co\.?|Company|Enterprise|Solutions|Technologies|Systems|Services|Group))/i,
+      /^([A-Z][A-Za-z\s]+)$/m
+    ];
+    
+    for (const pattern of companyPatterns) {
+      const match = text.match(pattern);
+      if (match && match[1] && match[1].length > 3 && match[1].length < 50) {
+        const potential = match[1].trim();
+        // Don't use if it looks like a name (no spaces or too short)
+        if (potential.includes(' ') || potential.length > 10) {
+          contact.company = potential;
+          break;
+        }
+      }
+    }
+    
+    return contact;
+  };
+
+  // Run OCR on captured image
+  const runOCR = async (imageData: string) => {
+    setOcrScanning(true);
+    setOcrProgress(0);
+    
+    try {
+      const result = await Tesseract.recognize(imageData, 'eng', {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            setOcrProgress(Math.round(m.progress * 100));
+          }
+        }
+      });
+      
+      const extractedText = result.data.text;
+      console.log('OCR Text:', extractedText);
+      
+      const parsedData = parseBusinessCardText(extractedText);
+      console.log('Parsed data:', parsedData);
+      
+      setFormData(prev => ({
+        ...prev,
+        ...parsedData,
+        tags: prev.tags || []
+      }));
+    } catch (error) {
+      console.error('OCR Error:', error);
+      alert('OCR failed. Please enter details manually.');
+    } finally {
+      setOcrScanning(false);
+      setOcrProgress(0);
+    }
+  };
 
   const importBulkContacts = async () => {
     setBulkImporting(true);
@@ -468,7 +596,16 @@ function ContactsContent() {
               <h3 className="text-lg font-semibold">
                 {scannerMode === 'card' ? '📷 Scan Business Card' : '📱 Scan QR Code'}
               </h3>
-              <button onClick={() => { setShowScanner(false); setCapturedImage(null); }} className="text-zinc-400 hover:text-white p-2">✕</button>
+              <button 
+                onClick={() => { 
+                  setShowScanner(false); 
+                  setCapturedImage(null); 
+                  setOcrScanning(false);
+                  setOcrProgress(0);
+                }} 
+                className="text-zinc-400 hover:text-white p-2 disabled:opacity-50"
+                disabled={ocrScanning}
+              >✕</button>
             </div>
             
             <div className="flex gap-2 mb-4">
@@ -490,14 +627,30 @@ function ContactsContent() {
               <div className="mb-4">
                 <img src={capturedImage} alt="Captured" className="w-full rounded-lg mb-3" />
                 <p className="text-sm text-zinc-400 text-center mb-3">
-                  Image captured! Now fill in the contact details below.
+                  {ocrScanning ? 'Scanning...' : '✅ Text extracted! Review and edit details below.'}
                 </p>
                 <button
-                  onClick={() => setCapturedImage(null)}
+                  onClick={() => { 
+                    setCapturedImage(null); 
+                    setOcrScanning(false);
+                    setFormData({ firstName: '', lastName: '', emailPrimary: '', tags: [], source: 'business_card', relationshipStrength: 'warm', doNotContact: false });
+                  }}
                   className="w-full bg-zinc-700 hover:bg-zinc-600 py-2 rounded-lg mb-3"
                 >
                   🔄 Retake Photo
                 </button>
+              </div>
+            ) : ocrScanning ? (
+              <div className="mb-4 text-center py-8">
+                <div className="animate-spin text-4xl mb-3">⚙️</div>
+                <p className="text-zinc-300 font-medium">Scanning business card...</p>
+                <p className="text-zinc-500 text-sm mt-1">{ocrProgress}%</p>
+                <div className="w-full bg-zinc-700 rounded-full h-2 mt-3">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${ocrProgress}%` }}
+                  />
+                </div>
               </div>
             ) : (
               <div className="space-y-3 mb-4">
@@ -512,8 +665,11 @@ function ContactsContent() {
                         const file = e.target.files?.[0];
                         if (file) {
                           const reader = new FileReader();
-                          reader.onload = (ev) => {
-                            setCapturedImage(ev.target?.result as string);
+                          reader.onload = async (ev) => {
+                            const imageData = ev.target?.result as string;
+                            setCapturedImage(imageData);
+                            // Run OCR on the captured image
+                            await runOCR(imageData);
                           };
                           reader.readAsDataURL(file);
                         }
