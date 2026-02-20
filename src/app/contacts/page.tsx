@@ -68,6 +68,7 @@ function ContactsContent() {
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [ocrScanning, setOcrScanning] = useState(false);
   const [ocrProgress, setOcrProgress] = useState(0);
+  const [extractedData, setExtractedData] = useState<Partial<Contact> | null>(null);
 
   // Parse business card text to extract contact info
   const parseBusinessCardText = (text: string): Partial<Contact> => {
@@ -180,11 +181,24 @@ function ContactsContent() {
       const parsedData = parseBusinessCardText(extractedText);
       console.log('Parsed data:', parsedData);
       
-      setFormData(prev => ({
-        ...prev,
-        ...parsedData,
-        tags: prev.tags || []
-      }));
+      // Store extracted data for display
+      setExtractedData(parsedData);
+      
+      // Update form data with extracted info
+      setFormData({
+        firstName: parsedData.firstName || '',
+        lastName: parsedData.lastName || '',
+        emailPrimary: parsedData.emailPrimary || '',
+        phoneMobile: parsedData.phoneMobile || '',
+        company: parsedData.company || '',
+        jobTitle: parsedData.jobTitle || '',
+        companyWebsite: parsedData.companyWebsite || '',
+        linkedInUrl: parsedData.linkedInUrl || '',
+        source: 'business_card',
+        tags: [],
+        relationshipStrength: 'warm',
+        doNotContact: false
+      });
     } catch (error) {
       console.error('OCR Error:', error);
       alert('OCR failed. Please enter details manually.');
@@ -602,6 +616,8 @@ function ContactsContent() {
                   setCapturedImage(null); 
                   setOcrScanning(false);
                   setOcrProgress(0);
+                  setExtractedData(null);
+                  setFormData({ firstName: '', lastName: '', emailPrimary: '', tags: [], source: 'manual', relationshipStrength: 'warm', doNotContact: false });
                 }} 
                 className="text-zinc-400 hover:text-white p-2 disabled:opacity-50"
                 disabled={ocrScanning}
@@ -626,12 +642,35 @@ function ContactsContent() {
             {capturedImage ? (
               <div className="mb-4">
                 <img src={capturedImage} alt="Captured" className="w-full rounded-lg mb-3" />
-                <p className="text-sm text-zinc-400 text-center mb-3">
-                  {ocrScanning ? 'Scanning...' : '✅ Text extracted! Review and edit details below.'}
-                </p>
+                {extractedData && (
+                  <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 mb-3">
+                    <p className="text-green-400 text-sm font-medium mb-2">✅ Extracted:</p>
+                    <div className="text-sm text-zinc-300 space-y-1">
+                      {(extractedData.firstName || extractedData.lastName) && (
+                        <p>👤 {extractedData.firstName} {extractedData.lastName}</p>
+                      )}
+                      {extractedData.emailPrimary && (
+                        <p>📧 {extractedData.emailPrimary}</p>
+                      )}
+                      {extractedData.phoneMobile && (
+                        <p>📱 {extractedData.phoneMobile}</p>
+                      )}
+                      {extractedData.company && (
+                        <p>🏢 {extractedData.company}</p>
+                      )}
+                      {extractedData.jobTitle && (
+                        <p>💼 {extractedData.jobTitle}</p>
+                      )}
+                      {!extractedData.firstName && !extractedData.emailPrimary && !extractedData.phoneMobile && !extractedData.company && (
+                        <p className="text-yellow-400">⚠️ No data detected - please enter manually</p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <button
                   onClick={() => { 
                     setCapturedImage(null); 
+                    setExtractedData(null);
                     setOcrScanning(false);
                     setFormData({ firstName: '', lastName: '', emailPrimary: '', tags: [], source: 'business_card', relationshipStrength: 'warm', doNotContact: false });
                   }}
@@ -724,21 +763,23 @@ function ContactsContent() {
             
             {/* Quick fill form after capture */}
             <div className="border-t border-zinc-700 pt-4">
-              <p className="text-sm text-zinc-400 mb-3">Fill in details from {scannerMode === 'card' ? 'card' : 'QR code'}:</p>
+              <p className="text-sm text-zinc-400 mb-3">
+                {capturedImage && extractedData ? '✏️ Edit extracted details:' : 'Fill in details manually:'}
+              </p>
               <div className="grid grid-cols-2 gap-2 mb-3">
                 <input
                   type="text"
                   placeholder="First Name"
                   value={formData.firstName || ''}
                   onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm"
+                  className={`bg-zinc-800 border rounded-lg px-3 py-2 text-sm ${formData.firstName ? 'border-green-600' : 'border-zinc-700'}`}
                 />
                 <input
                   type="text"
                   placeholder="Last Name"
                   value={formData.lastName || ''}
                   onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm"
+                  className={`bg-zinc-800 border rounded-lg px-3 py-2 text-sm ${formData.lastName ? 'border-green-600' : 'border-zinc-700'}`}
                 />
               </div>
               <input
@@ -746,28 +787,28 @@ function ContactsContent() {
                 placeholder="Email"
                 value={formData.emailPrimary || ''}
                 onChange={(e) => setFormData({ ...formData, emailPrimary: e.target.value })}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2"
+                className={`w-full bg-zinc-800 border rounded-lg px-3 py-2 text-sm mb-2 ${formData.emailPrimary ? 'border-green-600' : 'border-zinc-700'}`}
               />
               <input
                 type="tel"
                 placeholder="Phone"
                 value={formData.phoneMobile || ''}
                 onChange={(e) => setFormData({ ...formData, phoneMobile: e.target.value })}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2"
+                className={`w-full bg-zinc-800 border rounded-lg px-3 py-2 text-sm mb-2 ${formData.phoneMobile ? 'border-green-600' : 'border-zinc-700'}`}
               />
               <input
                 type="text"
                 placeholder="Company"
                 value={formData.company || ''}
                 onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2"
+                className={`w-full bg-zinc-800 border rounded-lg px-3 py-2 text-sm mb-2 ${formData.company ? 'border-green-600' : 'border-zinc-700'}`}
               />
               <input
                 type="text"
                 placeholder="Job Title"
                 value={formData.jobTitle || ''}
                 onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-3"
+                className={`w-full bg-zinc-800 border rounded-lg px-3 py-2 text-sm mb-3 ${formData.jobTitle ? 'border-green-600' : 'border-zinc-700'}`}
               />
             </div>
             
@@ -776,6 +817,7 @@ function ContactsContent() {
                 onClick={() => {
                   setShowScanner(false);
                   setCapturedImage(null);
+                  setExtractedData(null);
                   if (formData.firstName || formData.lastName || formData.emailPrimary) {
                     setShowAddForm(true);
                   }
@@ -786,7 +828,12 @@ function ContactsContent() {
                 Save Contact
               </button>
               <button
-                onClick={() => { setShowScanner(false); setCapturedImage(null); setFormData({ firstName: '', lastName: '', emailPrimary: '', tags: [], source: 'manual', relationshipStrength: 'warm', doNotContact: false }); }}
+                onClick={() => { 
+                  setShowScanner(false); 
+                  setCapturedImage(null); 
+                  setExtractedData(null);
+                  setFormData({ firstName: '', lastName: '', emailPrimary: '', tags: [], source: 'manual', relationshipStrength: 'warm', doNotContact: false }); 
+                }}
                 className="bg-zinc-700 hover:bg-zinc-600 px-4 py-2 rounded-lg"
               >
                 Cancel
