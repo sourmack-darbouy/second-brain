@@ -51,6 +51,7 @@ function ContactsContent() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [scannerMode, setScannerMode] = useState<'card' | 'qr'>('card');
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -150,6 +151,8 @@ function ContactsContent() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const vcardInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const qrInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState<Partial<Contact>>({
     firstName: '', lastName: '', emailPrimary: '', phoneMobile: '',
@@ -374,30 +377,6 @@ function ContactsContent() {
     return contact;
   };
 
-  // Simulate business card OCR (in production, use Tesseract.js or cloud API)
-  const simulateBusinessCardScan = async () => {
-    // In a real implementation, you would:
-    // 1. Capture image from video/canvas
-    // 2. Send to OCR service (Tesseract.js locally, or Google Vision API)
-    // 3. Parse the text to extract contact info
-    
-    // For now, return mock data to show the flow
-    const mockData: Partial<Contact> = {
-      firstName: 'John',
-      lastName: 'Smith',
-      jobTitle: 'Sales Director',
-      company: 'Tech Corp',
-      emailPrimary: 'john.smith@techcorp.com',
-      phoneMobile: '+61 400 000 000',
-      source: 'business_card',
-      tags: [],
-    };
-    
-    setFormData(mockData);
-    setShowScanner(false);
-    setShowAddForm(true);
-  };
-
   const exportContacts = () => {
     const csv = [
       ['First Name', 'Last Name', 'Email', 'Phone', 'Company', 'Title', 'Tags'].join(','),
@@ -489,7 +468,7 @@ function ContactsContent() {
               <h3 className="text-lg font-semibold">
                 {scannerMode === 'card' ? '📷 Scan Business Card' : '📱 Scan QR Code'}
               </h3>
-              <button onClick={() => setShowScanner(false)} className="text-zinc-400 hover:text-white p-2">✕</button>
+              <button onClick={() => { setShowScanner(false); setCapturedImage(null); }} className="text-zinc-400 hover:text-white p-2">✕</button>
             </div>
             
             <div className="flex gap-2 mb-4">
@@ -497,35 +476,161 @@ function ContactsContent() {
                 onClick={() => setScannerMode('card')}
                 className={`flex-1 py-2 rounded-lg ${scannerMode === 'card' ? 'bg-blue-600' : 'bg-zinc-700'}`}
               >
-                Business Card
+                📇 Business Card
               </button>
               <button
                 onClick={() => setScannerMode('qr')}
                 className={`flex-1 py-2 rounded-lg ${scannerMode === 'qr' ? 'bg-blue-600' : 'bg-zinc-700'}`}
               >
-                QR Code
+                📱 QR Code
               </button>
             </div>
             
-            <div className="bg-zinc-800 rounded-lg aspect-video flex items-center justify-center mb-4">
-              <video ref={videoRef} className="hidden" autoPlay playsInline />
-              <canvas ref={canvasRef} className="hidden" />
-              <div className="text-zinc-500 text-center p-8">
-                <div className="text-4xl mb-2">📷</div>
-                <p>Camera access required</p>
-                <p className="text-xs mt-2">Click "Start Camera" below</p>
+            {capturedImage ? (
+              <div className="mb-4">
+                <img src={capturedImage} alt="Captured" className="w-full rounded-lg mb-3" />
+                <p className="text-sm text-zinc-400 text-center mb-3">
+                  Image captured! Now fill in the contact details below.
+                </p>
+                <button
+                  onClick={() => setCapturedImage(null)}
+                  className="w-full bg-zinc-700 hover:bg-zinc-600 py-2 rounded-lg mb-3"
+                >
+                  🔄 Retake Photo
+                </button>
               </div>
+            ) : (
+              <div className="space-y-3 mb-4">
+                {scannerMode === 'card' ? (
+                  <>
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            setCapturedImage(ev.target?.result as string);
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg flex items-center justify-center gap-2"
+                    >
+                      📷 Take Photo
+                    </button>
+                    <p className="text-xs text-zinc-500 text-center">
+                      Takes a photo of the business card with your camera
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      ref={qrInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          // For QR codes, we'd need a QR decoder library
+                          // For now, just show the image and manual entry
+                          const reader = new FileReader();
+                          reader.onload = (ev) => {
+                            setCapturedImage(ev.target?.result as string);
+                            setFormData({ ...formData, source: 'qr_code', tags: [] });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => qrInputRef.current?.click()}
+                      className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg flex items-center justify-center gap-2"
+                    >
+                      📱 Scan QR Code
+                    </button>
+                    <p className="text-xs text-zinc-500 text-center">
+                      Point camera at QR code (vCard or LinkedIn)
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
+            
+            {/* Quick fill form after capture */}
+            <div className="border-t border-zinc-700 pt-4">
+              <p className="text-sm text-zinc-400 mb-3">Fill in details from {scannerMode === 'card' ? 'card' : 'QR code'}:</p>
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <input
+                  type="text"
+                  placeholder="First Name"
+                  value={formData.firstName || ''}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm"
+                />
+                <input
+                  type="text"
+                  placeholder="Last Name"
+                  value={formData.lastName || ''}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <input
+                type="email"
+                placeholder="Email"
+                value={formData.emailPrimary || ''}
+                onChange={(e) => setFormData({ ...formData, emailPrimary: e.target.value })}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2"
+              />
+              <input
+                type="tel"
+                placeholder="Phone"
+                value={formData.phoneMobile || ''}
+                onChange={(e) => setFormData({ ...formData, phoneMobile: e.target.value })}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2"
+              />
+              <input
+                type="text"
+                placeholder="Company"
+                value={formData.company || ''}
+                onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-2"
+              />
+              <input
+                type="text"
+                placeholder="Job Title"
+                value={formData.jobTitle || ''}
+                onChange={(e) => setFormData({ ...formData, jobTitle: e.target.value })}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm mb-3"
+              />
             </div>
             
             <div className="flex gap-2">
               <button
-                onClick={simulateBusinessCardScan}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded-lg"
+                onClick={() => {
+                  setShowScanner(false);
+                  setCapturedImage(null);
+                  if (formData.firstName || formData.lastName || formData.emailPrimary) {
+                    setShowAddForm(true);
+                  }
+                }}
+                disabled={!formData.firstName && !formData.lastName && !formData.emailPrimary}
+                className="flex-1 bg-green-600 hover:bg-green-700 disabled:bg-zinc-700 disabled:text-zinc-500 py-2 rounded-lg font-medium"
               >
-                Capture & Scan
+                Save Contact
               </button>
               <button
-                onClick={() => setShowScanner(false)}
+                onClick={() => { setShowScanner(false); setCapturedImage(null); setFormData({ firstName: '', lastName: '', emailPrimary: '', tags: [], source: 'manual', relationshipStrength: 'warm', doNotContact: false }); }}
                 className="bg-zinc-700 hover:bg-zinc-600 px-4 py-2 rounded-lg"
               >
                 Cancel
