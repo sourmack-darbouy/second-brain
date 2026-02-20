@@ -61,6 +61,9 @@ function ContactsContent() {
   const [showBulkImport, setShowBulkImport] = useState(false);
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0, duplicates: 0 });
+  const [mergeMode, setMergeMode] = useState(false);
+  const [selectedForMerge, setSelectedForMerge] = useState<string[]>([]);
+  const [showMergeModal, setShowMergeModal] = useState(false);
 
   const importBulkContacts = async () => {
     setBulkImporting(true);
@@ -105,6 +108,42 @@ function ContactsContent() {
     fetchContacts();
     
     alert(`Import complete!\n${imported} new contacts added\n${duplicates} duplicates merged/skipped`);
+  };
+
+  const toggleMergeSelect = (contactId: string) => {
+    if (selectedForMerge.includes(contactId)) {
+      setSelectedForMerge(selectedForMerge.filter(id => id !== contactId));
+    } else {
+      if (selectedForMerge.length < 2) {
+        setSelectedForMerge([...selectedForMerge, contactId]);
+      } else {
+        // Replace the oldest selection
+        setSelectedForMerge([selectedForMerge[1], contactId]);
+      }
+    }
+  };
+
+  const performMerge = async () => {
+    if (selectedForMerge.length !== 2) return;
+    
+    const [primaryId, secondaryId] = selectedForMerge;
+    
+    try {
+      const res = await fetch('/api/contacts', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ primaryId, secondaryId }),
+      });
+      
+      if (res.ok) {
+        setSelectedForMerge([]);
+        setMergeMode(false);
+        setShowMergeModal(false);
+        fetchContacts();
+      }
+    } catch (error) {
+      console.error('Failed to merge contacts:', error);
+    }
   };
   
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -585,6 +624,12 @@ function ContactsContent() {
             />
           </label>
           <button
+            onClick={() => { setMergeMode(!mergeMode); setSelectedForMerge([]); }}
+            className={`px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm ${mergeMode ? 'bg-purple-600 hover:bg-purple-700' : 'bg-zinc-700 hover:bg-zinc-600'}`}
+          >
+            🔗 Merge
+          </button>
+          <button
             onClick={exportContacts}
             className="bg-zinc-700 hover:bg-zinc-600 px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm"
           >
@@ -816,12 +861,38 @@ function ContactsContent() {
           {filteredContacts.map(contact => (
             <div
               key={contact.id}
-              onClick={() => { setSelectedContact(contact); setFormData(contact); setEditMode(true); setShowAddForm(true); }}
-              className={`bg-zinc-900 rounded-lg p-4 border cursor-pointer hover:border-zinc-600 transition ${
-                contact.status === 'duplicate' ? 'border-yellow-600' : 'border-zinc-800'
-              }`}
+              className={`bg-zinc-900 rounded-lg p-4 border transition relative ${
+                mergeMode && selectedForMerge.includes(contact.id) 
+                  ? 'border-purple-500 ring-2 ring-purple-500/30' 
+                  : contact.status === 'duplicate' 
+                    ? 'border-yellow-600' 
+                    : 'border-zinc-800'
+              } ${mergeMode ? 'cursor-pointer' : ''} hover:border-zinc-600`}
+              onClick={mergeMode ? () => toggleMergeSelect(contact.id) : undefined}
             >
-              <div className="flex items-start justify-between">
+              {/* Delete button (always visible) */}
+              <button
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  if (confirm(`Delete ${contact.firstName} ${contact.lastName}?`)) {
+                    deleteContact(contact.id);
+                  }
+                }}
+                className="absolute top-2 right-2 text-zinc-500 hover:text-red-400 p-1 rounded hover:bg-zinc-800 transition"
+                title="Delete contact"
+              >
+                🗑️
+              </button>
+              
+              {/* Merge selection indicator */}
+              {mergeMode && (
+                <div className="absolute top-2 left-2 w-6 h-6 rounded-full border-2 flex items-center justify-center text-xs font-bold
+                  ${selectedForMerge.includes(contact.id) ? 'bg-purple-600 border-purple-400' : 'border-zinc-600'}">
+                  {selectedForMerge.includes(contact.id) ? '✓' : (selectedForMerge.length > 0 ? '2' : '1')}
+                </div>
+              )}
+              
+              <div className="flex items-start justify-between mt-4">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-zinc-700 rounded-full flex items-center justify-center text-lg font-medium">
                     {contact.firstName[0]}{contact.lastName[0]}
@@ -856,6 +927,72 @@ function ContactsContent() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Merge Action Bar */}
+      {mergeMode && selectedForMerge.length > 0 && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-zinc-800 rounded-lg p-4 flex items-center gap-4 shadow-lg border border-zinc-700 z-50">
+          <span className="text-zinc-300">
+            {selectedForMerge.length} contact{selectedForMerge.length > 1 ? 's' : ''} selected
+          </span>
+          {selectedForMerge.length === 2 && (
+            <button
+              onClick={() => setShowMergeModal(true)}
+              className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg font-medium"
+            >
+              Merge Selected
+            </button>
+          )}
+          <button
+            onClick={() => { setSelectedForMerge([]); setMergeMode(false); }}
+            className="bg-zinc-700 hover:bg-zinc-600 px-4 py-2 rounded-lg"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* Merge Confirmation Modal */}
+      {showMergeModal && selectedForMerge.length === 2 && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 rounded-lg p-6 max-w-md w-full border border-zinc-700">
+            <h3 className="text-lg font-semibold mb-4">🔗 Merge Contacts</h3>
+            <p className="text-zinc-400 mb-4">
+              This will combine these two contacts. Information from both will be preserved where possible.
+            </p>
+            <div className="space-y-3 mb-6">
+              {selectedForMerge.map(id => {
+                const c = contacts.find(ct => ct.id === id);
+                if (!c) return null;
+                return (
+                  <div key={id} className="bg-zinc-800 rounded-lg p-3 flex items-center gap-3">
+                    <div className="w-10 h-10 bg-zinc-700 rounded-full flex items-center justify-center">
+                      {c.firstName[0]}{c.lastName[0]}
+                    </div>
+                    <div>
+                      <p className="font-medium">{c.firstName} {c.lastName}</p>
+                      <p className="text-sm text-zinc-400">{c.emailPrimary}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={performMerge}
+                className="flex-1 bg-purple-600 hover:bg-purple-700 py-2 rounded-lg font-medium"
+              >
+                Merge
+              </button>
+              <button
+                onClick={() => { setShowMergeModal(false); setSelectedForMerge([]); }}
+                className="bg-zinc-700 hover:bg-zinc-600 px-4 py-2 rounded-lg"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
