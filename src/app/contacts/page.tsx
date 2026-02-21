@@ -209,14 +209,24 @@ function ContactsContent() {
     }
   };
 
-  // Run AI analysis on captured image (uses OpenAI Vision)
+  // Get vision settings from localStorage
+  const getVisionSettings = () => {
+    const provider = localStorage.getItem('vision_provider') || 'openai';
+    const model = localStorage.getItem('vision_model') || 'gpt-4o-mini';
+    const apiKey = localStorage.getItem(`api_key_${provider}`) || '';
+    return { provider, model, apiKey };
+  };
+
+  // Run AI analysis on captured image (uses configured provider)
   const runAIAnalysis = async (imageData: string) => {
-    const apiKey = localStorage.getItem('openai_api_key');
+    const settings = getVisionSettings();
     
-    if (!apiKey) {
-      const key = prompt('Enter your OpenAI API key (will be saved locally):\n\nGet one at: platform.openai.com/api-keys');
+    if (!settings.apiKey) {
+      const providerName = settings.provider === 'zai' ? 'z.ai' : settings.provider.toUpperCase();
+      const key = prompt(`Enter your ${providerName} API key (will be saved locally):\n\nOr go to Settings to configure a different provider.`);
       if (!key) return;
-      localStorage.setItem('openai_api_key', key);
+      localStorage.setItem(`api_key_${settings.provider}`, key);
+      settings.apiKey = key;
     }
     
     setAiScanning(true);
@@ -227,7 +237,9 @@ function ContactsContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           image: imageData, 
-          apiKey: localStorage.getItem('openai_api_key') 
+          apiKey: settings.apiKey,
+          provider: settings.provider,
+          model: settings.model
         })
       });
       
@@ -237,7 +249,7 @@ function ContactsContent() {
         throw new Error(result.error || 'AI analysis failed');
       }
       
-      console.log('AI extracted:', result.data);
+      console.log('AI extracted:', result.data, 'using provider:', result.provider);
       setExtractedData(result.data);
       
       // Update form with AI-extracted data
