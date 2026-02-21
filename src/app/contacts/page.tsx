@@ -209,38 +209,15 @@ function ContactsContent() {
     }
   };
 
-  // Get vision settings from localStorage
-  const getVisionSettings = () => {
-    const provider = localStorage.getItem('vision_provider') || 'openai';
-    const model = localStorage.getItem('vision_model') || 'gpt-4o-mini';
-    const apiKey = localStorage.getItem(`api_key_${provider}`) || '';
-    return { provider, model, apiKey };
-  };
-
-  // Run AI analysis on captured image (uses configured provider)
+  // Run AI analysis on captured image (uses OpenClaw's z.ai credentials)
   const runAIAnalysis = async (imageData: string) => {
-    const settings = getVisionSettings();
-    
-    if (!settings.apiKey) {
-      const providerName = settings.provider === 'zai' ? 'z.ai' : settings.provider.toUpperCase();
-      const key = prompt(`Enter your ${providerName} API key (will be saved locally):\n\nOr go to Settings to configure a different provider.`);
-      if (!key) return;
-      localStorage.setItem(`api_key_${settings.provider}`, key);
-      settings.apiKey = key;
-    }
-    
     setAiScanning(true);
     
     try {
       const response = await fetch('/api/scan-card', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          image: imageData, 
-          apiKey: settings.apiKey,
-          provider: settings.provider,
-          model: settings.model
-        })
+        body: JSON.stringify({ image: imageData })
       });
       
       const result = await response.json();
@@ -249,7 +226,7 @@ function ContactsContent() {
         throw new Error(result.error || 'AI analysis failed');
       }
       
-      console.log('AI extracted:', result.data, 'using provider:', result.provider);
+      console.log('AI extracted:', result.data);
       setExtractedData(result.data);
       
       // Update form with AI-extracted data

@@ -45,7 +45,7 @@ function Header() {
         </h1>
         
         {/* Desktop Nav */}
-        <nav className="hidden sm:flex gap-4 lg:gap-6 items-center">
+        <nav className="hidden sm:flex gap-4 lg:gap-6">
           <a href="/" className="text-zinc-400 hover:text-zinc-100 transition text-sm lg:text-base">
             Dashboard
           </a>
@@ -60,9 +60,6 @@ function Header() {
           </a>
           <a href="/tasks" className="text-zinc-400 hover:text-zinc-100 transition text-sm lg:text-base">
             Tasks
-          </a>
-          <a href="/settings" className="text-zinc-500 hover:text-zinc-100 transition text-lg" title="Settings">
-            ⚙️
           </a>
         </nav>
 
@@ -110,13 +107,6 @@ function MobileNav() {
         title="Contacts"
       >
         👥
-      </a>
-      <a 
-        href="/settings" 
-        className="p-2 rounded-lg hover:bg-zinc-800 transition"
-        title="Settings"
-      >
-        ⚙️
       </a>
     </div>
   );
