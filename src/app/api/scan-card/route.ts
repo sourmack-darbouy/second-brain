@@ -19,8 +19,14 @@ const BUSINESS_CARD_PROMPT = `Extract contact information from this business car
 
 Return ONLY the JSON, no other text.`;
 
-// Get z.ai API key from OpenClaw config
-function getOpenClayApiKey(): string | null {
+// Get z.ai API key - try OpenClay config first, then env var
+function getApiKey(): string | null {
+  // Try environment variable first (for Vercel)
+  if (process.env.ZAI_API_KEY) {
+    return process.env.ZAI_API_KEY;
+  }
+  
+  // Try OpenClaw config (for local development)
   try {
     const authPath = path.join('/root/.openclaw/agents/main/agent/auth-profiles.json');
     const authConfig = JSON.parse(fs.readFileSync(authPath, 'utf8'));
