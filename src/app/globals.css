@@ -99,7 +99,7 @@ body {
 /* QR Code Scanner - html5-qrcode styling */
 #qr-reader-container {
   width: 100%;
-  min-height: 300px;
+  height: 100%;
   position: relative;
   background: #000;
   border-radius: 0.5rem;
@@ -109,31 +109,32 @@ body {
 #qr-reader-container video {
   width: 100% !important;
   height: 100% !important;
-  min-height: 300px;
   object-fit: cover;
   border-radius: 0.5rem;
 }
 
-/* The dark overlay around the scan area */
-#qr-reader-container #__qr-shader {
-  background: rgba(0, 0, 0, 0.5) !important;
-  border-radius: 0.5rem;
+/* Hide html5-qrcode's default scan region UI - we use our own overlay */
+#qr-reader-container #__qr-shader,
+#qr-reader-container #qr-box-shader,
+#qr-reader-container .qr-shader-region,
+#qr-reader-container #scan-region-highlight {
+  display: none !important;
 }
 
-/* The scanning box outline */
-#qr-reader-container #qr-box-shader {
-  border: 3px solid #3b82f6 !important;
-  border-radius: 12px;
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
-}
-
-/* Scan region highlight */
-#qr-reader-container .qr-shader-region {
-  border: 2px solid #22c55e !important;
-  border-radius: 8px;
-}
-
-/* Ensure scanner UI elements are visible */
-#qr-reader-container div {
-  border-radius: inherit;
+/* QR Scanner animation */
+@keyframes scan {
+  0%, 100% {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(50px);
+    opacity: 0;
+  }
 }

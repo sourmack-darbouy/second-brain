@@ -946,12 +946,31 @@ function ContactsContent() {
                   <>
                     {qrScannerActive ? (
                       <div>
-                        <div 
-                          ref={scannerRef}
-                          id="qr-reader-container" 
-                          className="w-full rounded-lg overflow-hidden bg-black"
-                          style={{ minHeight: '300px', height: '300px' }}
-                        />
+                        {/* Scanner container with custom overlay */}
+                        <div className="relative w-full rounded-lg overflow-hidden bg-black" style={{ height: '300px' }}>
+                          <div 
+                            ref={scannerRef}
+                            id="qr-reader-container" 
+                            className="w-full h-full"
+                          />
+                          {/* Custom scanning overlay */}
+                          <div className="absolute inset-0 pointer-events-none">
+                            {/* Dark overlay with cutout */}
+                            <div className="absolute inset-0 bg-black/50" style={{
+                              clipPath: 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 15% 0%, 15% 15%, 85% 15%, 85% 85%, 15% 85%, 15% 0%, 0% 0%)'
+                            }} />
+                            {/* Scanning box border */}
+                            <div className="absolute top-[15%] left-[15%] right-[15%] bottom-[15%] border-4 border-blue-500 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.5)]">
+                              {/* Corner accents */}
+                              <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-green-400 rounded-tl-lg"></div>
+                              <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-green-400 rounded-tr-lg"></div>
+                              <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-green-400 rounded-bl-lg"></div>
+                              <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-green-400 rounded-br-lg"></div>
+                              {/* Animated scan line */}
+                              <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-green-400 to-transparent animate-pulse" style={{ top: '50%', animation: 'scan 2s ease-in-out infinite' }} />
+                            </div>
+                          </div>
+                        </div>
                         <div className="flex items-center justify-center gap-2 mt-2">
                           <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                           <p className="text-xs text-zinc-400">
