@@ -107,13 +107,13 @@ body {
 
 #qr-reader video {
   width: 100% !important;
-  height: 300px !important;
+  min-height: 300px !important;
   object-fit: cover;
   border-radius: 0.5rem;
 }
 
-/* Hide html5-qrcode's default scan region UI since we use custom overlay */
-#qr-reader #__qr-shader,
-#qr-reader .qr-shader-region {
-  display: none !important;
+/* Scanner canvas overlay */
+#qr-reader canvas {
+  width: 100% !important;
+  height: auto !important;
 }

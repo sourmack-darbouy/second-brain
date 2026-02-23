@@ -591,10 +591,11 @@ function ContactsContent() {
           { facingMode: "environment" },
           {
             fps: 10,
-            qrbox: { width: 250, height: 250 },
+            // No qrbox - scan entire camera view for better detection
           },
           (decodedText) => {
             if (!mounted) return;
+            console.log('QR decoded:', decodedText);
             const parsedContact = parseQRData(decodedText);
             setExtractedData(parsedContact);
             setFormData(prev => ({
@@ -606,7 +607,9 @@ function ContactsContent() {
             html5QrCode?.stop().catch(() => {});
             setQrScannerActive(false);
           },
-          () => {} // ignore scan errors
+          (errorMessage) => {
+            // Scan miss - ignore
+          }
         );
       } catch (err) {
         if (mounted) {
@@ -863,32 +866,15 @@ function ContactsContent() {
                   </>
                 ) : qrScannerActive ? (
                   <div>
-                    {/* Scanner container with visible scanning box overlay */}
-                    <div className="relative w-full bg-black rounded-lg overflow-hidden" style={{ minHeight: '300px' }}>
-                      <div 
-                        ref={qrScannerRef}
-                        id="qr-reader" 
-                        className="w-full"
-                      />
-                      {/* Visible scanning box overlay */}
-                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div className="relative w-56 h-56">
-                          {/* Dark overlay around the box */}
-                          <div className="absolute inset-0 border-4 border-white/30 rounded-2xl bg-black/20" />
-                          {/* Corner accents */}
-                          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl" />
-                          <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl" />
-                          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl" />
-                          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl" />
-                          {/* Scanning line animation */}
-                          <div className="absolute left-3 right-3 h-0.5 bg-gradient-to-r from-transparent via-green-400 to-transparent animate-pulse" style={{ top: '50%' }} />
-                        </div>
-                      </div>
-                      {/* Instructions */}
-                      <div className="absolute bottom-3 left-0 right-0 text-center">
-                        <p className="text-white/70 text-xs">Align QR code within the box</p>
-                      </div>
-                    </div>
+                    <div 
+                      ref={qrScannerRef}
+                      id="qr-reader" 
+                      className="w-full"
+                      style={{ minHeight: '300px' }}
+                    />
+                    <p className="text-xs text-zinc-400 text-center mt-2">
+                      Point camera at QR code...
+                    </p>
                     <button
                       onClick={() => {
                         if (html5QrScannerRef.current && html5QrScannerRef.current.isScanning) {
