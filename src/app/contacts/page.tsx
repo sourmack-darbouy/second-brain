@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, Suspense } from 'react';
 import Tesseract from 'tesseract.js';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { Html5Qrcode } from 'html5-qrcode';
 
 interface Contact {
   id: string;
@@ -74,7 +74,7 @@ function ContactsContent() {
   const [qrScannerActive, setQrScannerActive] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
   const qrScannerRef = useRef<HTMLDivElement>(null);
-  const html5QrScannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const html5QrScannerRef = useRef<Html5Qrcode | null>(null);
 
   // Parse business card text to extract contact info
   const parseBusinessCardText = (text: string): Partial<Contact> => {
@@ -576,25 +576,23 @@ function ContactsContent() {
     if (!qrScannerActive || !showScanner || scannerMode !== 'qr' || !qrScannerRef.current) return;
 
     let mounted = true;
+    let html5QrCode: Html5Qrcode | null = null;
 
-    const initScanner = () => {
+    const initScanner = async () => {
       if (!qrScannerRef.current || !mounted) return;
       
       try {
         qrScannerRef.current.innerHTML = '';
         
-        const html5QrCodeScanner = new Html5QrcodeScanner(
-          'qr-reader',
-          { 
-            fps: 10, 
+        html5QrCode = new Html5Qrcode('qr-reader');
+        html5QrScannerRef.current = html5QrCode;
+
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
             qrbox: { width: 250, height: 250 },
           },
-          false
-        );
-        
-        html5QrScannerRef.current = html5QrCodeScanner;
-
-        html5QrCodeScanner.render(
           (decodedText) => {
             if (!mounted) return;
             const parsedContact = parseQRData(decodedText);
@@ -605,13 +603,14 @@ function ContactsContent() {
               source: 'qr_code',
               tags: [],
             }));
-            html5QrCodeScanner.clear().catch(() => {});
+            html5QrCode?.stop().catch(() => {});
             setQrScannerActive(false);
           },
-          () => {}
+          () => {} // ignore scan errors
         );
       } catch (err) {
         if (mounted) {
+          console.error('QR scanner error:', err);
           setQrError('Could not start camera. Please allow camera permissions and try again.');
           setQrScannerActive(false);
         }
@@ -623,8 +622,8 @@ function ContactsContent() {
     return () => {
       mounted = false;
       clearTimeout(timeoutId);
-      if (html5QrScannerRef.current) {
-        html5QrScannerRef.current.clear().catch(() => {});
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().catch(() => {});
       }
     };
   }, [qrScannerActive, showScanner, scannerMode]);
@@ -632,10 +631,10 @@ function ContactsContent() {
   // Stop QR scanner when switching modes or closing modal
   useEffect(() => {
     if (!showScanner || scannerMode !== 'qr') {
-      if (html5QrScannerRef.current) {
-        html5QrScannerRef.current.clear().catch(() => {});
-        html5QrScannerRef.current = null;
+      if (html5QrScannerRef.current && html5QrScannerRef.current.isScanning) {
+        html5QrScannerRef.current.stop().catch(() => {});
       }
+      html5QrScannerRef.current = null;
       setQrScannerActive(false);
     }
   }, [showScanner, scannerMode]);
@@ -864,17 +863,38 @@ function ContactsContent() {
                   </>
                 ) : qrScannerActive ? (
                   <div>
-                    <div 
-                      ref={qrScannerRef}
-                      id="qr-reader" 
-                      className="w-full"
-                    />
+                    {/* Scanner container with visible scanning box overlay */}
+                    <div className="relative w-full bg-black rounded-lg overflow-hidden" style={{ minHeight: '300px' }}>
+                      <div 
+                        ref={qrScannerRef}
+                        id="qr-reader" 
+                        className="w-full"
+                      />
+                      {/* Visible scanning box overlay */}
+                      <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                        <div className="relative w-56 h-56">
+                          {/* Dark overlay around the box */}
+                          <div className="absolute inset-0 border-4 border-white/30 rounded-2xl bg-black/20" />
+                          {/* Corner accents */}
+                          <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-xl" />
+                          <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-xl" />
+                          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-xl" />
+                          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-xl" />
+                          {/* Scanning line animation */}
+                          <div className="absolute left-3 right-3 h-0.5 bg-gradient-to-r from-transparent via-green-400 to-transparent animate-pulse" style={{ top: '50%' }} />
+                        </div>
+                      </div>
+                      {/* Instructions */}
+                      <div className="absolute bottom-3 left-0 right-0 text-center">
+                        <p className="text-white/70 text-xs">Align QR code within the box</p>
+                      </div>
+                    </div>
                     <button
                       onClick={() => {
-                        if (html5QrScannerRef.current) {
-                          html5QrScannerRef.current.clear().catch(() => {});
-                          html5QrScannerRef.current = null;
+                        if (html5QrScannerRef.current && html5QrScannerRef.current.isScanning) {
+                          html5QrScannerRef.current.stop().catch(() => {});
                         }
+                        html5QrScannerRef.current = null;
                         setQrScannerActive(false);
                       }}
                       className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg mt-3"

@@ -97,35 +97,23 @@ body {
 }
 
 /* QR Code Scanner - html5-qrcode styling */
-#qr-reader-container {
+#qr-reader {
   width: 100%;
+  min-height: 300px;
   border-radius: 0.5rem;
   overflow: hidden;
+  background: #000;
 }
 
-#qr-reader-container video {
+#qr-reader video {
+  width: 100% !important;
+  height: 300px !important;
+  object-fit: cover;
   border-radius: 0.5rem;
 }
 
-/* Dark theme for scanner buttons */
-#qr-reader-container select,
-#qr-reader-container button {
-  background: #27272a !important;
-  color: #fff !important;
-  border-color: #3f3f46 !important;
-  border-radius: 0.5rem !important;
-}
-
-#qr-reader-container button[id*="start"],
-#qr-reader-container button[id*="scan"] {
-  background: #3b82f6 !important;
-  border: none !important;
-}
-
-#qr-reader-container button:hover {
-  opacity: 0.9;
-}
-
-#qr-reader-container #html5-qrcode-anchor-scan-type-change {
-  color: #a1a1aa !important;
+/* Hide html5-qrcode's default scan region UI since we use custom overlay */
+#qr-reader #__qr-shader,
+#qr-reader .qr-shader-region {
+  display: none !important;
 }
