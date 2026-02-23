@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState, useRef, Suspense, useCallback } from 'react';
+import { useEffect, useState, useRef, Suspense } from 'react';
 import Tesseract from 'tesseract.js';
-import { Html5Qrcode } from 'html5-qrcode';
-import jsQR from 'jsqr';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 
 interface Contact {
   id: string;
@@ -72,117 +71,10 @@ function ContactsContent() {
   const [ocrProgress, setOcrProgress] = useState(0);
   const [extractedData, setExtractedData] = useState<Partial<Contact> | null>(null);
   const [aiScanning, setAiScanning] = useState(false);
-  const [qrError, setQrError] = useState<string | null>(null);
   const [qrScannerActive, setQrScannerActive] = useState(false);
-  const scannerRef = useRef<HTMLDivElement>(null);
-  const html5QrCodeScannerRef = useRef<Html5Qrcode | null>(null);
-
-  // Start QR scanner
-  const startQRScanner = () => {
-    setQrError(null);
-    setCapturedImage(null);
-    setExtractedData(null);
-    setQrScannerActive(true);
-  };
-
-  // Stop QR scanner
-  const stopQRScanner = useCallback(async () => {
-    if (html5QrCodeScannerRef.current) {
-      try {
-        const scanner = html5QrCodeScannerRef.current;
-        if (scanner.isScanning) {
-          await scanner.stop();
-        }
-        scanner.clear();
-      } catch (e) {
-        console.error('Error stopping scanner:', e);
-      }
-      html5QrCodeScannerRef.current = null;
-    }
-    setQrScannerActive(false);
-  }, []);
-
-  // Initialize scanner when active and DOM is ready
-  useEffect(() => {
-    if (!qrScannerActive || !showScanner || scannerMode !== 'qr' || !scannerRef.current) return;
-
-    let mounted = true;
-    let html5QrCode: Html5Qrcode | null = null;
-
-    const initScanner = async () => {
-      if (!scannerRef.current || !mounted) return;
-      
-      try {
-        // Clear any existing scanner
-        scannerRef.current.innerHTML = '';
-        
-        html5QrCode = new Html5Qrcode('qr-reader-container', { verbose: false });
-        html5QrCodeScannerRef.current = html5QrCode;
-
-        await html5QrCode.start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: function(viewfinderWidth, viewfinderHeight) {
-              const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-              const qrboxSize = Math.floor(minEdge * 0.7);
-              return { width: qrboxSize, height: qrboxSize };
-            },
-            aspectRatio: 1.0,
-          },
-          (decodedText) => {
-            console.log('QR detected:', decodedText);
-            if (!mounted) return;
-            
-            // Parse and fill contact
-            const parsedContact = parseQRData(decodedText);
-            setExtractedData(parsedContact);
-            setFormData(prev => ({
-              ...prev,
-              ...parsedContact,
-              source: 'qr_code',
-              tags: [],
-            }));
-            
-            // Stop scanner
-            html5QrCode?.stop().catch(() => {});
-            setQrScannerActive(false);
-          },
-          () => {
-            // Ignore scan misses
-          }
-        );
-        
-        if (mounted) {
-          console.log('Scanner started successfully');
-        }
-      } catch (err) {
-        console.error('QR scanner error:', err);
-        if (mounted) {
-          setQrError('Could not start camera. Please allow camera permissions and try again.');
-          setQrScannerActive(false);
-        }
-      }
-    };
-
-    // Wait for DOM to be ready
-    const timeoutId = setTimeout(initScanner, 200);
-
-    return () => {
-      mounted = false;
-      clearTimeout(timeoutId);
-      if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().catch(() => {});
-      }
-    };
-  }, [qrScannerActive, showScanner, scannerMode]);
-
-  // Stop scanner when closing modal or switching modes
-  useEffect(() => {
-    if (!showScanner || scannerMode !== 'qr') {
-      stopQRScanner();
-    }
-  }, [showScanner, scannerMode]);
+  const [qrError, setQrError] = useState<string | null>(null);
+  const qrScannerRef = useRef<HTMLDivElement>(null);
+  const html5QrScannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   // Parse business card text to extract contact info
   const parseBusinessCardText = (text: string): Partial<Contact> => {
@@ -679,28 +571,74 @@ function ContactsContent() {
     return contact;
   };
 
-  // Decode QR code from image using jsQR
-  const decodeQRFromImage = async (imageDataUrl: string): Promise<string | null> => {
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(null);
-          return;
+  // Initialize QR scanner when active
+  useEffect(() => {
+    if (!qrScannerActive || !showScanner || scannerMode !== 'qr' || !qrScannerRef.current) return;
+
+    let mounted = true;
+
+    const initScanner = () => {
+      if (!qrScannerRef.current || !mounted) return;
+      
+      try {
+        qrScannerRef.current.innerHTML = '';
+        
+        const html5QrCodeScanner = new Html5QrcodeScanner(
+          'qr-reader',
+          { 
+            fps: 10, 
+            qrbox: { width: 250, height: 250 },
+          },
+          false
+        );
+        
+        html5QrScannerRef.current = html5QrCodeScanner;
+
+        html5QrCodeScanner.render(
+          (decodedText) => {
+            if (!mounted) return;
+            const parsedContact = parseQRData(decodedText);
+            setExtractedData(parsedContact);
+            setFormData(prev => ({
+              ...prev,
+              ...parsedContact,
+              source: 'qr_code',
+              tags: [],
+            }));
+            html5QrCodeScanner.clear().catch(() => {});
+            setQrScannerActive(false);
+          },
+          () => {}
+        );
+      } catch (err) {
+        if (mounted) {
+          setQrError('Could not start camera. Please allow camera permissions and try again.');
+          setQrScannerActive(false);
         }
-        ctx.drawImage(img, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, imageData.width, imageData.height);
-        resolve(code?.data || null);
-      };
-      img.onerror = () => resolve(null);
-      img.src = imageDataUrl;
-    });
-  };
+      }
+    };
+
+    const timeoutId = setTimeout(initScanner, 100);
+
+    return () => {
+      mounted = false;
+      clearTimeout(timeoutId);
+      if (html5QrScannerRef.current) {
+        html5QrScannerRef.current.clear().catch(() => {});
+      }
+    };
+  }, [qrScannerActive, showScanner, scannerMode]);
+
+  // Stop QR scanner when switching modes or closing modal
+  useEffect(() => {
+    if (!showScanner || scannerMode !== 'qr') {
+      if (html5QrScannerRef.current) {
+        html5QrScannerRef.current.clear().catch(() => {});
+        html5QrScannerRef.current = null;
+      }
+      setQrScannerActive(false);
+    }
+  }, [showScanner, scannerMode]);
 
   const exportContacts = () => {
     const csv = [
@@ -795,39 +733,36 @@ function ContactsContent() {
               </h3>
               <button 
                 onClick={() => { 
-                  stopQRScanner();
                   setShowScanner(false); 
                   setCapturedImage(null); 
                   setOcrScanning(false);
                   setOcrProgress(0);
                   setExtractedData(null);
-                  setQrError(null);
                   setFormData({ firstName: '', lastName: '', emailPrimary: '', tags: [], source: 'manual', relationshipStrength: 'warm', doNotContact: false });
                 }} 
-                className="text-zinc-400 hover:text-white p-2"
+                className="text-zinc-400 hover:text-white p-2 disabled:opacity-50"
+                disabled={ocrScanning}
               >✕</button>
             </div>
             
             <div className="flex gap-2 mb-4">
               <button
-                onClick={() => { stopQRScanner(); setScannerMode('card'); }}
+                onClick={() => setScannerMode('card')}
                 className={`flex-1 py-2 rounded-lg ${scannerMode === 'card' ? 'bg-blue-600' : 'bg-zinc-700'}`}
               >
                 📇 Business Card
               </button>
               <button
-                onClick={() => { setScannerMode('qr'); setCapturedImage(null); setExtractedData(null); setQrError(null); }}
+                onClick={() => setScannerMode('qr')}
                 className={`flex-1 py-2 rounded-lg ${scannerMode === 'qr' ? 'bg-blue-600' : 'bg-zinc-700'}`}
               >
                 📱 QR Code
               </button>
             </div>
             
-            {(capturedImage || (scannerMode === 'qr' && extractedData)) ? (
+            {capturedImage ? (
               <div className="mb-4">
-                {capturedImage && (
-                  <img src={capturedImage} alt="Captured" className="w-full rounded-lg mb-3" />
-                )}
+                <img src={capturedImage} alt="Captured" className="w-full rounded-lg mb-3" />
                 {extractedData && (
                   <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 mb-3">
                     <p className="text-green-400 text-sm font-medium mb-2">✅ Extracted:</p>
@@ -859,22 +794,7 @@ function ContactsContent() {
                     <div className="animate-spin text-2xl mb-2">🤖</div>
                     <p className="text-zinc-300">AI analyzing card...</p>
                   </div>
-                ) : scannerMode === 'qr' ? (
-                  <div className="flex gap-2 mb-3">
-                    <button
-                      onClick={() => { 
-                        setCapturedImage(null); 
-                        setExtractedData(null);
-                        setQrError(null);
-                        setFormData({ firstName: '', lastName: '', emailPrimary: '', tags: [], source: 'qr_code', relationshipStrength: 'warm', doNotContact: false });
-                        startQRScanner();
-                      }}
-                      className="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded-lg text-sm font-medium"
-                    >
-                      🔄 Scan Another
-                    </button>
-                  </div>
-                ) : capturedImage ? (
+                ) : (
                   <div className="flex gap-2 mb-3">
                     <button
                       onClick={() => runAIAnalysis(capturedImage)}
@@ -942,71 +862,70 @@ function ContactsContent() {
                       Takes a photo of the business card with your camera
                     </p>
                   </>
+                ) : qrScannerActive ? (
+                  <div>
+                    <div 
+                      ref={qrScannerRef}
+                      id="qr-reader" 
+                      className="w-full"
+                    />
+                    <button
+                      onClick={() => {
+                        if (html5QrScannerRef.current) {
+                          html5QrScannerRef.current.clear().catch(() => {});
+                          html5QrScannerRef.current = null;
+                        }
+                        setQrScannerActive(false);
+                      }}
+                      className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg mt-3"
+                    >
+                      ✕ Cancel
+                    </button>
+                  </div>
+                ) : qrError ? (
+                  <div className="text-center py-4">
+                    <p className="text-red-400 mb-3">{qrError}</p>
+                    <button
+                      onClick={() => { setQrError(null); setQrScannerActive(true); }}
+                      className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg"
+                    >
+                      🔄 Try Again
+                    </button>
+                  </div>
+                ) : extractedData && scannerMode === 'qr' ? (
+                  <div>
+                    <div className="bg-green-900/30 border border-green-700 rounded-lg p-3 mb-3">
+                      <p className="text-green-400 text-sm font-medium mb-2">✅ QR Code Scanned!</p>
+                      <div className="text-sm text-zinc-300 space-y-1">
+                        {(extractedData.firstName || extractedData.lastName) && (
+                          <p>👤 {extractedData.firstName} {extractedData.lastName}</p>
+                        )}
+                        {extractedData.emailPrimary && (
+                          <p>📧 {extractedData.emailPrimary}</p>
+                        )}
+                        {extractedData.linkedInUrl && (
+                          <p>🔗 LinkedIn detected</p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => { setExtractedData(null); setQrScannerActive(true); }}
+                      className="w-full bg-blue-600 hover:bg-blue-700 py-2 rounded-lg"
+                    >
+                      🔄 Scan Another
+                    </button>
+                  </div>
                 ) : (
                   <>
-                    {qrScannerActive ? (
-                      <div>
-                        {/* Scanner container with custom overlay */}
-                        <div className="relative w-full rounded-lg overflow-hidden bg-black" style={{ height: '300px' }}>
-                          <div 
-                            ref={scannerRef}
-                            id="qr-reader-container" 
-                            className="w-full h-full"
-                          />
-                          {/* Custom scanning overlay */}
-                          <div className="absolute inset-0 pointer-events-none">
-                            {/* Dark overlay with cutout */}
-                            <div className="absolute inset-0 bg-black/50" style={{
-                              clipPath: 'polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%, 15% 0%, 15% 15%, 85% 15%, 85% 85%, 15% 85%, 15% 0%, 0% 0%)'
-                            }} />
-                            {/* Scanning box border */}
-                            <div className="absolute top-[15%] left-[15%] right-[15%] bottom-[15%] border-4 border-blue-500 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.5)]">
-                              {/* Corner accents */}
-                              <div className="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-green-400 rounded-tl-lg"></div>
-                              <div className="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-green-400 rounded-tr-lg"></div>
-                              <div className="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-green-400 rounded-bl-lg"></div>
-                              <div className="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-green-400 rounded-br-lg"></div>
-                              {/* Animated scan line */}
-                              <div className="absolute left-2 right-2 h-0.5 bg-gradient-to-r from-transparent via-green-400 to-transparent animate-pulse" style={{ top: '50%', animation: 'scan 2s ease-in-out infinite' }} />
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-center gap-2 mt-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                          <p className="text-xs text-zinc-400">
-                            Point camera at QR code...
-                          </p>
-                        </div>
-                        <button
-                          onClick={() => stopQRScanner()}
-                          className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg mt-3"
-                        >
-                          ✕ Cancel
-                        </button>
-                      </div>
-                    ) : qrError ? (
-                      <div className="text-center py-4">
-                        <p className="text-red-400 mb-3">{qrError}</p>
-                        <button
-                          onClick={() => { setQrError(null); startQRScanner(); }}
-                          className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg"
-                        >
-                          🔄 Try Again
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          onClick={startQRScanner}
-                          className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg flex items-center justify-center gap-2"
-                        >
-                          📱 Start QR Scanner
-                        </button>
-                        <p className="text-xs text-zinc-500 text-center">
-                          Point camera at QR code (vCard or LinkedIn)
-                        </p>
-                      </>
-                    )}
+                    <button
+                      onClick={() => setQrScannerActive(true)}
+                      className="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-lg flex items-center justify-center gap-2"
+                    >
+                      📱 Start QR Scanner
+                    </button>
+                    <p className="text-xs text-zinc-500 text-center">
+                      Point camera at QR code (vCard or LinkedIn)
+                    </p>
                   </>
                 )}
               </div>
