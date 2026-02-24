@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, Suspense } from 'react';
 import Tesseract from 'tesseract.js';
-import { Html5Qrcode } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5QrcodeScanType } from 'html5-qrcode';
 
 interface Contact {
   id: string;
@@ -74,7 +74,7 @@ function ContactsContent() {
   const [qrScannerActive, setQrScannerActive] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
   const qrScannerRef = useRef<HTMLDivElement>(null);
-  const html5QrScannerRef = useRef<Html5Qrcode | null>(null);
+  const html5QrScannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   // Parse business card text to extract contact info
   const parseBusinessCardText = (text: string): Partial<Contact> => {
@@ -576,23 +576,25 @@ function ContactsContent() {
     if (!qrScannerActive || !showScanner || scannerMode !== 'qr' || !qrScannerRef.current) return;
 
     let mounted = true;
-    let html5QrCode: Html5Qrcode | null = null;
 
-    const initScanner = async () => {
+    const initScanner = () => {
       if (!qrScannerRef.current || !mounted) return;
       
       try {
         qrScannerRef.current.innerHTML = '';
         
-        html5QrCode = new Html5Qrcode('qr-reader');
-        html5QrScannerRef.current = html5QrCode;
+        // Configure scanner for CAMERA ONLY (no file upload)
+        const config = {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+        };
+        
+        const verbose = false;
+        const scanner = new Html5QrcodeScanner('qr-reader', config, verbose);
+        html5QrScannerRef.current = scanner;
 
-        await html5QrCode.start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            // No qrbox - scan entire camera view for better detection
-          },
+        scanner.render(
           (decodedText) => {
             if (!mounted) return;
             console.log('QR decoded:', decodedText);
@@ -604,11 +606,11 @@ function ContactsContent() {
               source: 'qr_code',
               tags: [],
             }));
-            html5QrCode?.stop().catch(() => {});
+            scanner.clear().catch(() => {});
             setQrScannerActive(false);
           },
           (errorMessage) => {
-            // Scan miss - ignore
+            // Scan error - ignore
           }
         );
       } catch (err) {
@@ -625,8 +627,8 @@ function ContactsContent() {
     return () => {
       mounted = false;
       clearTimeout(timeoutId);
-      if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().catch(() => {});
+      if (html5QrScannerRef.current) {
+        html5QrScannerRef.current.clear().catch(() => {});
       }
     };
   }, [qrScannerActive, showScanner, scannerMode]);
@@ -634,8 +636,8 @@ function ContactsContent() {
   // Stop QR scanner when switching modes or closing modal
   useEffect(() => {
     if (!showScanner || scannerMode !== 'qr') {
-      if (html5QrScannerRef.current && html5QrScannerRef.current.isScanning) {
-        html5QrScannerRef.current.stop().catch(() => {});
+      if (html5QrScannerRef.current) {
+        html5QrScannerRef.current.clear().catch(() => {});
       }
       html5QrScannerRef.current = null;
       setQrScannerActive(false);
@@ -877,8 +879,8 @@ function ContactsContent() {
                     </p>
                     <button
                       onClick={() => {
-                        if (html5QrScannerRef.current && html5QrScannerRef.current.isScanning) {
-                          html5QrScannerRef.current.stop().catch(() => {});
+                        if (html5QrScannerRef.current) {
+                          html5QrScannerRef.current.clear().catch(() => {});
                         }
                         html5QrScannerRef.current = null;
                         setQrScannerActive(false);

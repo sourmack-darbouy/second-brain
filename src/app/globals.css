@@ -112,8 +112,25 @@ body {
   border-radius: 0.5rem;
 }
 
-/* Scanner canvas overlay */
-#qr-reader canvas {
-  width: 100% !important;
-  height: auto !important;
+/* Style the scanner UI */
+#qr-reader button {
+  background-color: #3b82f6 !important;
+  border: none !important;
+  border-radius: 0.5rem !important;
+  color: white !important;
+  padding: 0.5rem 1rem !important;
+}
+
+#qr-reader select {
+  background-color: #27272a !important;
+  color: white !important;
+  border: 1px solid #3f3f46 !important;
+  border-radius: 0.5rem !important;
+  padding: 0.5rem !important;
+}
+
+/* Hide file upload section if it appears */
+#qr-reader #html5-qrcode-button-camera-permission,
+#qr-reader input[type="file"] {
+  display: none !important;
 }
