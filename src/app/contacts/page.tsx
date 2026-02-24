@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, Suspense } from 'react';
 import Tesseract from 'tesseract.js';
-import { Html5QrcodeScanner, Html5QrcodeScanType } from 'html5-qrcode';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 
 interface Contact {
   id: string;
@@ -74,7 +74,7 @@ function ContactsContent() {
   const [qrScannerActive, setQrScannerActive] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
   const qrScannerRef = useRef<HTMLDivElement>(null);
-  const html5QrScannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const html5QrScannerRef = useRef<Html5Qrcode | null>(null);
 
   // Parse business card text to extract contact info
   const parseBusinessCardText = (text: string): Partial<Contact> => {
@@ -571,33 +571,55 @@ function ContactsContent() {
     return contact;
   };
 
-  // Initialize QR scanner when active
+  // Initialize QR scanner when active - using Html5Qrcode for direct camera control
   useEffect(() => {
     if (!qrScannerActive || !showScanner || scannerMode !== 'qr' || !qrScannerRef.current) return;
 
     let mounted = true;
+    let scanner: Html5Qrcode | null = null;
 
-    const initScanner = () => {
+    const initScanner = async () => {
       if (!qrScannerRef.current || !mounted) return;
       
       try {
         qrScannerRef.current.innerHTML = '';
         
-        // Configure scanner for CAMERA ONLY (no file upload)
-        const config = {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-        };
-        
-        const verbose = false;
-        const scanner = new Html5QrcodeScanner('qr-reader', config, verbose);
+        // Create scanner with QR code only format for better performance
+        scanner = new Html5Qrcode('qr-reader', {
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          verbose: true, // Enable for debugging
+        });
         html5QrScannerRef.current = scanner;
 
-        scanner.render(
+        // Get cameras and select back camera
+        const devices = await Html5Qrcode.getCameras();
+        if (!devices || devices.length === 0) {
+          throw new Error('No cameras found');
+        }
+        
+        // Find back camera or use first available
+        let cameraId = devices[0].id;
+        const backCamera = devices.find(d => 
+          d.label.toLowerCase().includes('back') || 
+          d.label.toLowerCase().includes('rear') ||
+          d.label.toLowerCase().includes('environment')
+        );
+        if (backCamera) {
+          cameraId = backCamera.id;
+        }
+        
+        console.log('Cameras found:', devices, 'Using:', cameraId);
+
+        // Start scanning
+        await scanner.start(
+          cameraId,
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+          },
           (decodedText) => {
             if (!mounted) return;
-            console.log('QR decoded:', decodedText);
+            console.log('✅ QR SCANNED:', decodedText);
             const parsedContact = parseQRData(decodedText);
             setExtractedData(parsedContact);
             setFormData(prev => ({
@@ -606,29 +628,35 @@ function ContactsContent() {
               source: 'qr_code',
               tags: [],
             }));
-            scanner.clear().catch(() => {});
-            setQrScannerActive(false);
+            scanner?.stop().then(() => {
+              setQrScannerActive(false);
+            }).catch(console.error);
           },
           (errorMessage) => {
-            // Scan error - ignore
+            // Scan miss - occasional log
+            if (Math.random() < 0.05) {
+              console.log('Scanning...');
+            }
           }
         );
+        
+        console.log('Scanner started successfully');
       } catch (err) {
+        console.error('QR scanner error:', err);
         if (mounted) {
-          console.error('QR scanner error:', err);
           setQrError('Could not start camera. Please allow camera permissions and try again.');
           setQrScannerActive(false);
         }
       }
     };
 
-    const timeoutId = setTimeout(initScanner, 100);
+    const timeoutId = setTimeout(initScanner, 200);
 
     return () => {
       mounted = false;
       clearTimeout(timeoutId);
-      if (html5QrScannerRef.current) {
-        html5QrScannerRef.current.clear().catch(() => {});
+      if (scanner && scanner.isScanning) {
+        scanner.stop().catch(console.error);
       }
     };
   }, [qrScannerActive, showScanner, scannerMode]);
@@ -636,8 +664,8 @@ function ContactsContent() {
   // Stop QR scanner when switching modes or closing modal
   useEffect(() => {
     if (!showScanner || scannerMode !== 'qr') {
-      if (html5QrScannerRef.current) {
-        html5QrScannerRef.current.clear().catch(() => {});
+      if (html5QrScannerRef.current && html5QrScannerRef.current.isScanning) {
+        html5QrScannerRef.current.stop().catch(console.error);
       }
       html5QrScannerRef.current = null;
       setQrScannerActive(false);
@@ -879,8 +907,8 @@ function ContactsContent() {
                     </p>
                     <button
                       onClick={() => {
-                        if (html5QrScannerRef.current) {
-                          html5QrScannerRef.current.clear().catch(() => {});
+                        if (html5QrScannerRef.current && html5QrScannerRef.current.isScanning) {
+                          html5QrScannerRef.current.stop().catch(() => {});
                         }
                         html5QrScannerRef.current = null;
                         setQrScannerActive(false);
