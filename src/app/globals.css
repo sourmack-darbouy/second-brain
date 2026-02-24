@@ -110,6 +110,47 @@ body {
   min-height: 300px !important;
   object-fit: cover;
   border-radius: 0.5rem;
+  /* iOS Safari fixes */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  display: block !important;
+}
+
+/* iOS Safari specific QR scanner fixes */
+@supports (-webkit-touch-callout: none) {
+  #qr-reader {
+    min-height: 320px;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  #qr-reader video {
+    min-height: 320px !important;
+    /* Force hardware acceleration on iOS */
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+    /* Ensure video is visible */
+    opacity: 1 !important;
+    visibility: visible !important;
+  }
+  
+  /* Scanner scan region styling for iOS */
+  #qr-reader .qr-shaded-region {
+    border: 2px solid #3b82f6 !important;
+    border-radius: 8px !important;
+  }
+  
+  /* Scan line animation for iOS */
+  #qr-reader #__zbar-canvas-wrapper,
+  #qr-reader #html5-qrcode-swipe-wrapper {
+    display: block !important;
+  }
+}
+
+/* Scanner scan region (the box overlay) */
+#qr-reader .qr-shaded-region,
+#qr-reader #scan-region {
+  border: 2px solid #3b82f6 !important;
+  border-radius: 8px !important;
 }
 
 /* Style the scanner UI */
@@ -139,4 +180,11 @@ body {
 #qr-reader #html5-qrcode-button-camera-permission {
   font-size: 16px !important;
   padding: 12px 24px !important;
+}
+
+/* Scanner container on iOS */
+#html5-qrcode-anchor-scan-type-change,
+#html5-qrcode-anchor-camera-permission,
+#html5-qrcode-anchor-camera-selection {
+  color: #3b82f6 !important;
 }

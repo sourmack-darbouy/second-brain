@@ -591,56 +591,109 @@ function ContactsContent() {
         });
         html5QrScannerRef.current = scanner;
 
-        // Get cameras and select back camera
-        const devices = await Html5Qrcode.getCameras();
-        if (!devices || devices.length === 0) {
-          throw new Error('No cameras found');
-        }
+        // iOS Safari works best with facingMode constraint instead of camera ID
+        // This ensures back camera is used and scanning area is optimized
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
         
-        // Find back camera or use first available
-        let cameraId = devices[0].id;
-        const backCamera = devices.find(d => 
-          d.label.toLowerCase().includes('back') || 
-          d.label.toLowerCase().includes('rear') ||
-          d.label.toLowerCase().includes('environment')
-        );
-        if (backCamera) {
-          cameraId = backCamera.id;
-        }
-        
-        console.log('Cameras found:', devices, 'Using:', cameraId);
+        // For iOS, use facingMode constraint directly
+        // For other browsers, use camera selection
+        const config = {
+          fps: isIOS ? 5 : 10, // Lower FPS for iOS stability
+          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+            // Use 80% of the smaller dimension, minimum 200px
+            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+            const boxSize = Math.max(200, Math.floor(minEdge * 0.8));
+            return { width: boxSize, height: boxSize };
+          },
+          aspectRatio: 1.0, // Square scanning area for QR codes
+        };
 
-        // Start scanning
-        await scanner.start(
-          cameraId,
-          {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-          },
-          (decodedText) => {
-            if (!mounted) return;
-            console.log('✅ QR SCANNED:', decodedText);
-            const parsedContact = parseQRData(decodedText);
-            setExtractedData(parsedContact);
-            setFormData(prev => ({
-              ...prev,
-              ...parsedContact,
-              source: 'qr_code',
-              tags: [],
-            }));
-            scanner?.stop().then(() => {
-              setQrScannerActive(false);
-            }).catch(console.error);
-          },
-          (errorMessage) => {
-            // Scan miss - occasional log
-            if (Math.random() < 0.05) {
-              console.log('Scanning...');
-            }
-          }
-        );
+        // Try using facingMode first (works best on iOS Safari)
+        let started = false;
         
-        console.log('Scanner started successfully');
+        try {
+          // First attempt: use facingMode constraint (iOS preferred)
+          await scanner.start(
+            { facingMode: "environment" },
+            config,
+            (decodedText) => {
+              if (!mounted) return;
+              console.log('✅ QR SCANNED:', decodedText);
+              const parsedContact = parseQRData(decodedText);
+              setExtractedData(parsedContact);
+              setFormData(prev => ({
+                ...prev,
+                ...parsedContact,
+                source: 'qr_code',
+                tags: [],
+              }));
+              scanner?.stop().then(() => {
+                setQrScannerActive(false);
+              }).catch(console.error);
+            },
+            (errorMessage) => {
+              // Scan miss - occasional log
+              if (Math.random() < 0.05) {
+                console.log('Scanning...');
+              }
+            }
+          );
+          started = true;
+          console.log('Scanner started with facingMode: environment');
+        } catch (facingModeError) {
+          console.log('facingMode failed, trying camera selection:', facingModeError);
+          
+          // Fallback: Get cameras and select back camera manually
+          const devices = await Html5Qrcode.getCameras();
+          if (!devices || devices.length === 0) {
+            throw new Error('No cameras found');
+          }
+          
+          // Find back camera
+          let cameraId = devices[0].id;
+          const backCamera = devices.find(d => 
+            d.label.toLowerCase().includes('back') || 
+            d.label.toLowerCase().includes('rear') ||
+            d.label.toLowerCase().includes('environment')
+          );
+          if (backCamera) {
+            cameraId = backCamera.id;
+          }
+          
+          console.log('Cameras found:', devices, 'Using:', cameraId);
+
+          // Start with camera ID
+          await scanner.start(
+            cameraId,
+            config,
+            (decodedText) => {
+              if (!mounted) return;
+              console.log('✅ QR SCANNED:', decodedText);
+              const parsedContact = parseQRData(decodedText);
+              setExtractedData(parsedContact);
+              setFormData(prev => ({
+                ...prev,
+                ...parsedContact,
+                source: 'qr_code',
+                tags: [],
+              }));
+              scanner?.stop().then(() => {
+                setQrScannerActive(false);
+              }).catch(console.error);
+            },
+            (errorMessage) => {
+              if (Math.random() < 0.05) {
+                console.log('Scanning...');
+              }
+            }
+          );
+          started = true;
+          console.log('Scanner started with camera ID:', cameraId);
+        }
+        
+        if (!started) {
+          throw new Error('Failed to start scanner');
+        }
       } catch (err) {
         console.error('QR scanner error:', err);
         if (mounted) {
@@ -899,8 +952,13 @@ function ContactsContent() {
                     <div 
                       ref={qrScannerRef}
                       id="qr-reader" 
-                      className="w-full"
-                      style={{ minHeight: '300px' }}
+                      className="w-full bg-black rounded-lg overflow-hidden"
+                      style={{ 
+                        minHeight: '320px',
+                        minWidth: '100%',
+                        touchAction: 'none',
+                        WebkitTransform: 'translateZ(0)'
+                      }}
                     />
                     <p className="text-xs text-zinc-400 text-center mt-2">
                       Point camera at QR code...
