@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, Suspense } from 'react';
 import Tesseract from 'tesseract.js';
-import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
+import { Html5QrcodeScanner, Html5QrcodeScanType } from 'html5-qrcode';
 
 interface Contact {
   id: string;
@@ -74,7 +74,7 @@ function ContactsContent() {
   const [qrScannerActive, setQrScannerActive] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
   const qrScannerRef = useRef<HTMLDivElement>(null);
-  const html5QrScannerRef = useRef<Html5Qrcode | null>(null);
+  const html5QrScannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   // Parse business card text to extract contact info
   const parseBusinessCardText = (text: string): Partial<Contact> => {
@@ -571,154 +571,62 @@ function ContactsContent() {
     return contact;
   };
 
-  // Initialize QR scanner when active - using Html5Qrcode for direct camera control
+  // Initialize QR scanner using Html5QrcodeScanner (better iOS support)
   useEffect(() => {
     if (!qrScannerActive || !showScanner || scannerMode !== 'qr' || !qrScannerRef.current) return;
 
     let mounted = true;
-    let scanner: Html5Qrcode | null = null;
 
-    const initScanner = async () => {
-      if (!qrScannerRef.current || !mounted) return;
-      
-      try {
-        qrScannerRef.current.innerHTML = '';
-        
-        // Create scanner with QR code only format for better performance
-        scanner = new Html5Qrcode('qr-reader', {
-          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-          verbose: true, // Enable for debugging
-        });
-        html5QrScannerRef.current = scanner;
+    // Clear any previous scanner
+    qrScannerRef.current.innerHTML = '';
 
-        // iOS Safari works best with facingMode constraint instead of camera ID
-        // This ensures back camera is used and scanning area is optimized
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        
-        // For iOS, use facingMode constraint directly
-        // For other browsers, use camera selection
-        const config = {
-          fps: isIOS ? 5 : 10, // Lower FPS for iOS stability
-          qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
-            // Use 80% of the smaller dimension, minimum 200px
-            const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
-            const boxSize = Math.max(200, Math.floor(minEdge * 0.8));
-            return { width: boxSize, height: boxSize };
-          },
-          aspectRatio: 1.0, // Square scanning area for QR codes
-        };
+    // Html5QrcodeScanner handles iOS quirks automatically
+    const scanner = new Html5QrcodeScanner(
+      'qr-reader',
+      {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+        rememberLastUsedCamera: true,
+      },
+      /* verbose */ false
+    );
+    
+    html5QrScannerRef.current = scanner;
 
-        // Try using facingMode first (works best on iOS Safari)
-        let started = false;
-        
-        try {
-          // First attempt: use facingMode constraint (iOS preferred)
-          await scanner.start(
-            { facingMode: "environment" },
-            config,
-            (decodedText) => {
-              if (!mounted) return;
-              console.log('✅ QR SCANNED:', decodedText);
-              const parsedContact = parseQRData(decodedText);
-              setExtractedData(parsedContact);
-              setFormData(prev => ({
-                ...prev,
-                ...parsedContact,
-                source: 'qr_code',
-                tags: [],
-              }));
-              scanner?.stop().then(() => {
-                setQrScannerActive(false);
-              }).catch(console.error);
-            },
-            (errorMessage) => {
-              // Scan miss - occasional log
-              if (Math.random() < 0.05) {
-                console.log('Scanning...');
-              }
-            }
-          );
-          started = true;
-          console.log('Scanner started with facingMode: environment');
-        } catch (facingModeError) {
-          console.log('facingMode failed, trying camera selection:', facingModeError);
-          
-          // Fallback: Get cameras and select back camera manually
-          const devices = await Html5Qrcode.getCameras();
-          if (!devices || devices.length === 0) {
-            throw new Error('No cameras found');
-          }
-          
-          // Find back camera
-          let cameraId = devices[0].id;
-          const backCamera = devices.find(d => 
-            d.label.toLowerCase().includes('back') || 
-            d.label.toLowerCase().includes('rear') ||
-            d.label.toLowerCase().includes('environment')
-          );
-          if (backCamera) {
-            cameraId = backCamera.id;
-          }
-          
-          console.log('Cameras found:', devices, 'Using:', cameraId);
-
-          // Start with camera ID
-          await scanner.start(
-            cameraId,
-            config,
-            (decodedText) => {
-              if (!mounted) return;
-              console.log('✅ QR SCANNED:', decodedText);
-              const parsedContact = parseQRData(decodedText);
-              setExtractedData(parsedContact);
-              setFormData(prev => ({
-                ...prev,
-                ...parsedContact,
-                source: 'qr_code',
-                tags: [],
-              }));
-              scanner?.stop().then(() => {
-                setQrScannerActive(false);
-              }).catch(console.error);
-            },
-            (errorMessage) => {
-              if (Math.random() < 0.05) {
-                console.log('Scanning...');
-              }
-            }
-          );
-          started = true;
-          console.log('Scanner started with camera ID:', cameraId);
-        }
-        
-        if (!started) {
-          throw new Error('Failed to start scanner');
-        }
-      } catch (err) {
-        console.error('QR scanner error:', err);
-        if (mounted) {
-          setQrError('Could not start camera. Please allow camera permissions and try again.');
+    scanner.render(
+      (decodedText) => {
+        if (!mounted) return;
+        console.log('✅ QR SCANNED:', decodedText);
+        const parsedContact = parseQRData(decodedText);
+        setExtractedData(parsedContact);
+        setFormData(prev => ({
+          ...prev,
+          ...parsedContact,
+          source: 'qr_code',
+          tags: [],
+        }));
+        // Stop scanner after successful scan
+        scanner.clear().then(() => {
           setQrScannerActive(false);
-        }
+        }).catch(console.error);
+      },
+      (errorMessage) => {
+        // Scan errors are normal (no QR in view) - ignore
       }
-    };
-
-    const timeoutId = setTimeout(initScanner, 200);
+    );
 
     return () => {
       mounted = false;
-      clearTimeout(timeoutId);
-      if (scanner && scanner.isScanning) {
-        scanner.stop().catch(console.error);
-      }
+      scanner.clear().catch(() => {});
     };
   }, [qrScannerActive, showScanner, scannerMode]);
 
   // Stop QR scanner when switching modes or closing modal
   useEffect(() => {
     if (!showScanner || scannerMode !== 'qr') {
-      if (html5QrScannerRef.current && html5QrScannerRef.current.isScanning) {
-        html5QrScannerRef.current.stop().catch(console.error);
+      if (html5QrScannerRef.current) {
+        html5QrScannerRef.current.clear().catch(() => {});
       }
       html5QrScannerRef.current = null;
       setQrScannerActive(false);
@@ -965,8 +873,8 @@ function ContactsContent() {
                     </p>
                     <button
                       onClick={() => {
-                        if (html5QrScannerRef.current && html5QrScannerRef.current.isScanning) {
-                          html5QrScannerRef.current.stop().catch(() => {});
+                        if (html5QrScannerRef.current) {
+                          html5QrScannerRef.current.clear().catch(() => {});
                         }
                         html5QrScannerRef.current = null;
                         setQrScannerActive(false);
