@@ -26,6 +26,8 @@ export default function TasksPage() {
   const [newTask, setNewTask] = useState('');
   const [newUrgent, setNewUrgent] = useState(false);
   const [newImportant, setNewImportant] = useState(true);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -85,6 +87,26 @@ export default function TasksPage() {
   const deleteTask = (id: string) => {
     const updated = tasks.filter(t => t.id !== id);
     saveTasks(updated);
+  };
+
+  const startEdit = (task: Task) => {
+    setEditingId(task.id);
+    setEditText(task.text);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditText('');
+  };
+
+  const saveEdit = (id: string) => {
+    if (!editText.trim()) return;
+    const updated = tasks.map(t =>
+      t.id === id ? { ...t, text: editText.trim() } : t
+    );
+    saveTasks(updated);
+    setEditingId(null);
+    setEditText('');
   };
 
   const updateTaskMatrix = (id: string, urgent: boolean, important: boolean) => {
@@ -216,6 +238,12 @@ export default function TasksPage() {
           onToggle={toggleTask}
           onDelete={deleteTask}
           onUpdateMatrix={updateTaskMatrix}
+          editingId={editingId}
+          editText={editText}
+          onStartEdit={startEdit}
+          onCancelEdit={cancelEdit}
+          onSaveEdit={saveEdit}
+          onSetEditText={setEditText}
         />
 
         {/* Decide - Important, Not Urgent */}
@@ -225,6 +253,12 @@ export default function TasksPage() {
           onToggle={toggleTask}
           onDelete={deleteTask}
           onUpdateMatrix={updateTaskMatrix}
+          editingId={editingId}
+          editText={editText}
+          onStartEdit={startEdit}
+          onCancelEdit={cancelEdit}
+          onSaveEdit={saveEdit}
+          onSetEditText={setEditText}
         />
 
         {/* Delegate - Urgent, Not Important */}
@@ -234,6 +268,12 @@ export default function TasksPage() {
           onToggle={toggleTask}
           onDelete={deleteTask}
           onUpdateMatrix={updateTaskMatrix}
+          editingId={editingId}
+          editText={editText}
+          onStartEdit={startEdit}
+          onCancelEdit={cancelEdit}
+          onSaveEdit={saveEdit}
+          onSetEditText={setEditText}
         />
 
         {/* Delete - Not Urgent, Not Important */}
@@ -243,6 +283,12 @@ export default function TasksPage() {
           onToggle={toggleTask}
           onDelete={deleteTask}
           onUpdateMatrix={updateTaskMatrix}
+          editingId={editingId}
+          editText={editText}
+          onStartEdit={startEdit}
+          onCancelEdit={cancelEdit}
+          onSaveEdit={saveEdit}
+          onSetEditText={setEditText}
         />
       </div>
 
@@ -259,21 +305,62 @@ export default function TasksPage() {
                 key={task.id}
                 className="border-l-4 border-zinc-600 bg-zinc-800/50 p-2.5 sm:p-3 rounded-r"
               >
-                <div className="flex items-start gap-2">
-                  <input
-                    type="checkbox"
-                    checked={task.completed}
-                    onChange={() => toggleTask(task.id)}
-                    className="mt-0.5 sm:mt-1 w-5 h-5"
-                  />
-                  <span className="flex-1 line-through text-zinc-500 text-sm sm:text-base">{task.text}</span>
-                  <button
-                    onClick={() => deleteTask(task.id)}
-                    className="text-zinc-500 hover:text-red-400 p-1"
-                  >
-                    ✕
-                  </button>
-                </div>
+                {editingId === task.id ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') saveEdit(task.id);
+                        if (e.key === 'Escape') cancelEdit();
+                      }}
+                      className="flex-1 bg-zinc-700 border border-zinc-600 rounded px-2 py-1 text-sm"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => saveEdit(task.id)}
+                      className="text-green-400 hover:text-green-300 px-2 py-1 text-sm font-medium"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      className="text-zinc-400 hover:text-zinc-300 px-2 py-1 text-sm"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={task.completed}
+                      onChange={() => toggleTask(task.id)}
+                      className="mt-0.5 sm:mt-1 w-5 h-5"
+                    />
+                    <span 
+                      className="flex-1 line-through text-zinc-500 text-sm sm:text-base cursor-pointer"
+                      onClick={() => startEdit(task)}
+                      title="Click to edit"
+                    >
+                      {task.text}
+                    </span>
+                    <button
+                      onClick={() => startEdit(task)}
+                      className="text-zinc-500 hover:text-blue-400 p-1"
+                      title="Edit"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => deleteTask(task.id)}
+                      className="text-zinc-500 hover:text-red-400 p-1"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -290,12 +377,24 @@ function Quadrant({
   onToggle,
   onDelete,
   onUpdateMatrix,
+  editingId,
+  editText,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onSetEditText,
 }: {
   config: typeof quadrantConfig.do;
   tasks: Task[];
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdateMatrix: (id: string, urgent: boolean, important: boolean) => void;
+  editingId: string | null;
+  editText: string;
+  onStartEdit: (task: Task) => void;
+  onCancelEdit: () => void;
+  onSaveEdit: (id: string) => void;
+  onSetEditText: (text: string) => void;
 }) {
   return (
     <div className={`rounded-lg p-3 sm:p-4 border-2 ${config.color}`}>
@@ -319,6 +418,12 @@ function Quadrant({
             onToggle={onToggle}
             onDelete={onDelete}
             onUpdateMatrix={onUpdateMatrix}
+            editingId={editingId}
+            editText={editText}
+            onStartEdit={onStartEdit}
+            onCancelEdit={onCancelEdit}
+            onSaveEdit={onSaveEdit}
+            onSetEditText={onSetEditText}
           />
         ))}
         {tasks.length === 0 && (
@@ -364,68 +469,127 @@ const quadrantConfig = {
   },
 };
 
-// Task item component with quick matrix adjustment
+// Task item component with quick matrix adjustment and inline edit
 function TaskItem({
   task,
   onToggle,
   onDelete,
   onUpdateMatrix,
+  editingId,
+  editText,
+  onStartEdit,
+  onCancelEdit,
+  onSaveEdit,
+  onSetEditText,
 }: {
   task: Task;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
   onUpdateMatrix: (id: string, urgent: boolean, important: boolean) => void;
+  editingId: string | null;
+  editText: string;
+  onStartEdit: (task: Task) => void;
+  onCancelEdit: () => void;
+  onSaveEdit: (id: string) => void;
+  onSetEditText: (text: string) => void;
 }) {
   const quadrant = getQuadrant(task);
+  const isEditing = editingId === task.id;
 
   return (
     <div className="bg-zinc-800/50 p-2.5 sm:p-3 rounded group">
-      <div className="flex items-start gap-2">
-        <input
-          type="checkbox"
-          checked={task.completed}
-          onChange={() => onToggle(task.id)}
-          className="mt-0.5 sm:mt-1 w-5 h-5 flex-shrink-0"
-        />
-        <span className="flex-1 text-sm sm:text-base">{task.text}</span>
-        <button
-          onClick={() => onDelete(task.id)}
-          className="text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 active:opacity-100 sm:opacity-0 p-1 -mr-1"
-        >
-          ✕
-        </button>
-      </div>
-      {/* Quick move buttons - Always visible on mobile, hover on desktop */}
-      <div className="flex gap-1.5 mt-2 sm:opacity-0 sm:group-hover:opacity-100 transition">
-        <button
-          onClick={() => onUpdateMatrix(task.id, true, true)}
-          className={`text-base px-2 py-1 rounded ${quadrant === 'do' ? 'bg-red-500 text-white' : 'bg-zinc-700 active:bg-red-500/50'}`}
-          title="Do First"
-        >
-          🔥
-        </button>
-        <button
-          onClick={() => onUpdateMatrix(task.id, false, true)}
-          className={`text-base px-2 py-1 rounded ${quadrant === 'decide' ? 'bg-blue-500 text-white' : 'bg-zinc-700 active:bg-blue-500/50'}`}
-          title="Schedule"
-        >
-          📅
-        </button>
-        <button
-          onClick={() => onUpdateMatrix(task.id, true, false)}
-          className={`text-base px-2 py-1 rounded ${quadrant === 'delegate' ? 'bg-yellow-500 text-black' : 'bg-zinc-700 active:bg-yellow-500/50'}`}
-          title="Delegate"
-        >
-          👥
-        </button>
-        <button
-          onClick={() => onUpdateMatrix(task.id, false, false)}
-          className={`text-base px-2 py-1 rounded ${quadrant === 'delete' ? 'bg-zinc-500 text-white' : 'bg-zinc-700 active:bg-zinc-600'}`}
-          title="Eliminate"
-        >
-          🗑️
-        </button>
-      </div>
+      {isEditing ? (
+        // Edit mode
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={editText}
+            onChange={(e) => onSetEditText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') onSaveEdit(task.id);
+              if (e.key === 'Escape') onCancelEdit();
+            }}
+            className="flex-1 bg-zinc-700 border border-zinc-600 rounded px-2 py-1 text-sm"
+            autoFocus
+          />
+          <button
+            onClick={() => onSaveEdit(task.id)}
+            className="text-green-400 hover:text-green-300 px-2 py-1 text-sm font-medium"
+          >
+            Save
+          </button>
+          <button
+            onClick={onCancelEdit}
+            className="text-zinc-400 hover:text-zinc-300 px-2 py-1 text-sm"
+          >
+            ✕
+          </button>
+        </div>
+      ) : (
+        // View mode
+        <>
+          <div className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              checked={task.completed}
+              onChange={() => onToggle(task.id)}
+              className="mt-0.5 sm:mt-1 w-5 h-5 flex-shrink-0"
+            />
+            <span 
+              className="flex-1 text-sm sm:text-base cursor-pointer" 
+              onClick={() => onStartEdit(task)}
+              title="Click to edit"
+            >
+              {task.text}
+            </span>
+            <button
+              onClick={() => onStartEdit(task)}
+              className="text-zinc-500 hover:text-blue-400 opacity-0 group-hover:opacity-100 active:opacity-100 p-1 -mr-1"
+              title="Edit"
+            >
+              ✏️
+            </button>
+            <button
+              onClick={() => onDelete(task.id)}
+              className="text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 active:opacity-100 p-1 -mr-1"
+              title="Delete"
+            >
+              ✕
+            </button>
+          </div>
+          {/* Quick move buttons - Always visible on mobile, hover on desktop */}
+          <div className="flex gap-1.5 mt-2 sm:opacity-0 sm:group-hover:opacity-100 transition">
+            <button
+              onClick={() => onUpdateMatrix(task.id, true, true)}
+              className={`text-base px-2 py-1 rounded ${quadrant === 'do' ? 'bg-red-500 text-white' : 'bg-zinc-700 active:bg-red-500/50'}`}
+              title="Do First"
+            >
+              🔥
+            </button>
+            <button
+              onClick={() => onUpdateMatrix(task.id, false, true)}
+              className={`text-base px-2 py-1 rounded ${quadrant === 'decide' ? 'bg-blue-500 text-white' : 'bg-zinc-700 active:bg-blue-500/50'}`}
+              title="Schedule"
+            >
+              📅
+            </button>
+            <button
+              onClick={() => onUpdateMatrix(task.id, true, false)}
+              className={`text-base px-2 py-1 rounded ${quadrant === 'delegate' ? 'bg-yellow-500 text-black' : 'bg-zinc-700 active:bg-yellow-500/50'}`}
+              title="Delegate"
+            >
+              👥
+            </button>
+            <button
+              onClick={() => onUpdateMatrix(task.id, false, false)}
+              className={`text-base px-2 py-1 rounded ${quadrant === 'delete' ? 'bg-zinc-500 text-white' : 'bg-zinc-700 active:bg-zinc-600'}`}
+              title="Eliminate"
+            >
+              🗑️
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }
