@@ -2,6 +2,10 @@
 
 import { useEffect, useState, Suspense, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
+import dynamic from 'next/dynamic';
+
+// Dynamic import for VoiceCapture (client-only)
+const VoiceCapture = dynamic(() => import('@/components/VoiceCapture'), { ssr: false });
 
 interface Memory {
   name: string;
@@ -177,6 +181,9 @@ function MemoriesContent() {
   const [viewMode, setViewMode] = useState<'preview' | 'source'>('preview');
   const [showActionItems, setShowActionItems] = useState(false);
   const [dateFilter, setDateFilter] = useState<'all' | 'week' | 'month'>('all');
+  
+  // Voice capture
+  const [showVoiceCapture, setShowVoiceCapture] = useState(false);
 
   // Fetch all data
   const fetchData = useCallback(async () => {
@@ -438,6 +445,53 @@ function MemoriesContent() {
     }
   };
 
+  // Handle voice capture save
+  const handleVoiceSave = async (content: string, structured: any) => {
+    const today = new Date().toISOString().split('T')[0];
+    const memoryPath = `memory/${today}.md`;
+    
+    // Check if today's note exists
+    const existingMemory = memories.find(m => m.path === memoryPath);
+    
+    if (existingMemory) {
+      // Append to existing note
+      const updatedContent = existingMemory.content + '\n\n---\n\n' + content;
+      
+      try {
+        await fetch('/api/memories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: memoryPath,
+            content: updatedContent,
+            type: 'daily',
+          }),
+        });
+        
+        fetchData();
+      } catch (error) {
+        console.error('Failed to save voice note:', error);
+      }
+    } else {
+      // Create new note with voice content
+      try {
+        await fetch('/api/memories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: memoryPath,
+            content,
+            type: 'daily',
+          }),
+        });
+        
+        fetchData();
+      } catch (error) {
+        console.error('Failed to create voice note:', error);
+      }
+    }
+  };
+
   const deleteMemory = async () => {
     if (!selectedMemory) return;
 
@@ -674,6 +728,12 @@ function MemoriesContent() {
           </button>
           <button onClick={() => setShowActionItems(!showActionItems)} className="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg font-medium transition text-sm">
             ✓ Actions ({actionItems.length})
+          </button>
+          <button 
+            onClick={() => setShowVoiceCapture(true)} 
+            className="bg-purple-600 hover:bg-purple-700 px-3 py-2 rounded-lg font-medium transition text-sm flex items-center gap-1"
+          >
+            🎙️ Voice
           </button>
           <button onClick={createDailyNote} className="bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm">
             + Today
@@ -924,6 +984,15 @@ function MemoriesContent() {
           )}
         </div>
       </div>
+
+      {/* Voice Capture Modal */}
+      {showVoiceCapture && (
+        <VoiceCapture
+          onSave={handleVoiceSave}
+          onClose={() => setShowVoiceCapture(false)}
+          date={new Date().toISOString().split('T')[0]}
+        />
+      )}
 
       {/* Mobile toggle */}
       <button
