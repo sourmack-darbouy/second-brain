@@ -9,6 +9,7 @@ const VoiceCapture = dynamic(() => import('@/components/VoiceCapture'), { ssr: f
 const MemoryTimeline = dynamic(() => import('@/components/MemoryTimeline'), { ssr: false });
 const SummaryView = dynamic(() => import('@/components/SummaryView'), { ssr: false });
 const AdvancedSearch = dynamic(() => import('@/components/AdvancedSearch'), { ssr: false });
+const WikiLinksPanel = dynamic(() => import('@/components/WikiLinksPanel'), { ssr: false });
 
 interface Memory {
   name: string;
@@ -998,17 +999,42 @@ function MemoriesContent() {
                 </div>
               )}
 
+              {/* Wiki Links Panel */}
+              {!editing && selectedMemory && (
+                <WikiLinksPanel
+                  currentMemory={selectedMemory}
+                  memories={memories}
+                  onNavigate={(path) => {
+                    const mem = memories.find(m => m.path === path);
+                    if (mem) selectMemory(mem);
+                  }}
+                  onCreateMemory={async (title) => {
+                    const today = new Date().toISOString().split('T')[0];
+                    const path = `memory/${today}-${title.toLowerCase().replace(/\s+/g, '-')}.md`;
+                    const content = `# ${title}\n\nCreated from wiki link.\n\n## Notes\n\n## Related\n- [[${today}]]\n`;
+                    
+                    await fetch('/api/memories', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ path, content, type: 'daily' }),
+                    });
+                    
+                    fetchData();
+                  }}
+                />
+              )}
+
               {editing ? (
                 <div className="relative">
                   <textarea
                     ref={textareaRef}
                     value={editContent}
                     onChange={handleTextareaChange}
-                    placeholder={`# ${selectedMemory.name}\n\nUse @Name to mention contacts\nUse #tags to organize\nUse [[Link]] for wiki links\nUse - [ ] for action items`}
+                    placeholder={`# ${selectedMemory.name}\n\nUse @Name to mention contacts\nUse #tags to organize\nUse [[Title]] for wiki links (bi-directional)\nUse - [ ] for action items`}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 sm:p-4 text-zinc-300 font-mono text-sm min-h-[50vh] sm:min-h-[60vh]"
                   />
                   <div className="absolute bottom-3 right-3 text-xs text-zinc-500">
-                    Type @ for contacts, # for tags
+                    Type @ for contacts, # for tags, [[ for wiki links
                   </div>
                 </div>
               ) : viewMode === 'preview' ? (
