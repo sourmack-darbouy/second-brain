@@ -75,6 +75,10 @@ function ContactsContent() {
   const [qrError, setQrError] = useState<string | null>(null);
   const qrScannerRef = useRef<HTMLDivElement>(null);
   const html5QrScannerRef = useRef<Html5Qrcode | null>(null);
+  
+  // Memory mentions
+  const [memoryMentions, setMemoryMentions] = useState<{ memoryDate: string; memoryPath: string; context: string; timestamp: string }[]>([]);
+  const [loadingMentions, setLoadingMentions] = useState(false);
 
   // Parse business card text to extract contact info
   const parseBusinessCardText = (text: string): Partial<Contact> => {
@@ -367,9 +371,34 @@ function ContactsContent() {
     }
   };
 
+  // Fetch memory mentions for a contact
+  const fetchMemoryMentions = async (firstName: string, lastName: string) => {
+    setLoadingMentions(true);
+    try {
+      const contactName = `${firstName} ${lastName}`;
+      const res = await fetch(`/api/memories-enhanced?action=contact-mentions&contact=${encodeURIComponent(contactName)}`);
+      const data = await res.json();
+      setMemoryMentions(data.mentions || []);
+    } catch (error) {
+      console.error('Failed to fetch memory mentions:', error);
+      setMemoryMentions([]);
+    } finally {
+      setLoadingMentions(false);
+    }
+  };
+
   useEffect(() => {
     fetchContacts();
   }, []);
+
+  // Fetch memory mentions when contact is selected
+  useEffect(() => {
+    if (selectedContact?.firstName && selectedContact?.lastName) {
+      fetchMemoryMentions(selectedContact.firstName, selectedContact.lastName);
+    } else {
+      setMemoryMentions([]);
+    }
+  }, [selectedContact?.id]);
 
   const saveContact = async (forceCreate = false) => {
     try {
@@ -1336,6 +1365,44 @@ function ContactsContent() {
               placeholder="Any additional notes..."
             />
           </div>
+          
+          {/* Memory Mentions Section */}
+          {selectedContact && (
+            <div className="mt-4">
+              <label className="block text-sm text-zinc-400 mb-2">
+                🧠 Memory Mentions
+              </label>
+              {loadingMentions ? (
+                <div className="text-zinc-500 text-sm">Loading mentions...</div>
+              ) : memoryMentions.length === 0 ? (
+                <div className="text-zinc-500 text-sm">
+                  No memories mention this contact yet. Use <span className="text-blue-400">@{selectedContact.firstName} {selectedContact.lastName}</span> in a memory to link them.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-auto">
+                  {memoryMentions.map((mention, i) => (
+                    <a
+                      key={i}
+                      href={`/memories?file=${encodeURIComponent(mention.memoryPath)}`}
+                      className="block bg-zinc-800 hover:bg-zinc-700 rounded-lg p-3 transition"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-blue-400">
+                          📅 {mention.memoryDate}
+                        </span>
+                        <span className="text-xs text-zinc-500">
+                          {new Date(mention.timestamp).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-400 line-clamp-2">
+                        {mention.context}
+                      </p>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           
           <div className="mt-4 flex gap-2">
             <button
