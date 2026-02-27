@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic';
 const VoiceCapture = dynamic(() => import('@/components/VoiceCapture'), { ssr: false });
 const MemoryTimeline = dynamic(() => import('@/components/MemoryTimeline'), { ssr: false });
 const SummaryView = dynamic(() => import('@/components/SummaryView'), { ssr: false });
+const AdvancedSearch = dynamic(() => import('@/components/AdvancedSearch'), { ssr: false });
 
 interface Memory {
   name: string;
@@ -192,6 +193,22 @@ function MemoriesContent() {
   
   // Summary view
   const [showSummary, setShowSummary] = useState(false);
+  
+  // Advanced search
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+
+  // Keyboard shortcut for search (Cmd/Ctrl + K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setShowAdvancedSearch(true);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Fetch all data
   const fetchData = useCallback(async () => {
@@ -731,7 +748,16 @@ function MemoriesContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-2xl sm:text-3xl font-bold">Memories</h2>
         <div className="flex flex-wrap gap-2">
-          <button onClick={() => setShowTagSidebar(!showTagSidebar)} className="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg font-medium transition text-sm">
+          <button 
+            onClick={() => setShowAdvancedSearch(true)} 
+            className="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg font-medium transition text-sm flex items-center gap-1"
+          >
+            🔍 Search
+          </button>
+          <button 
+            onClick={() => setShowTagSidebar(!showTagSidebar)} 
+            className="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg font-medium transition text-sm"
+          >
             🏷️ Tags
           </button>
           <button onClick={() => setShowActionItems(!showActionItems)} className="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg font-medium transition text-sm">
@@ -1047,6 +1073,20 @@ function MemoriesContent() {
               }),
             }).then(() => fetchData());
           }}
+        />
+      )}
+
+      {/* Advanced Search Modal */}
+      {showAdvancedSearch && (
+        <AdvancedSearch
+          memories={memories}
+          contacts={contacts}
+          tags={tags}
+          onSelectResult={(path) => {
+            const mem = memories.find(m => m.path === path);
+            if (mem) selectMemory(mem);
+          }}
+          onClose={() => setShowAdvancedSearch(false)}
         />
       )}
 
