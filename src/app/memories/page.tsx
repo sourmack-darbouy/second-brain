@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 // Dynamic imports for client-only components
 const VoiceCapture = dynamic(() => import('@/components/VoiceCapture'), { ssr: false });
 const MemoryTimeline = dynamic(() => import('@/components/MemoryTimeline'), { ssr: false });
+const SummaryView = dynamic(() => import('@/components/SummaryView'), { ssr: false });
 
 interface Memory {
   name: string;
@@ -188,6 +189,9 @@ function MemoriesContent() {
   
   // Timeline view
   const [showTimeline, setShowTimeline] = useState(false);
+  
+  // Summary view
+  const [showSummary, setShowSummary] = useState(false);
 
   // Fetch all data
   const fetchData = useCallback(async () => {
@@ -745,6 +749,12 @@ function MemoriesContent() {
           >
             📅 Timeline
           </button>
+          <button 
+            onClick={() => setShowSummary(true)} 
+            className="bg-amber-600 hover:bg-amber-700 px-3 py-2 rounded-lg font-medium transition text-sm flex items-center gap-1"
+          >
+            📊 Summary
+          </button>
           <button onClick={createDailyNote} className="bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm">
             + Today
           </button>
@@ -1014,6 +1024,29 @@ function MemoriesContent() {
             setShowTimeline(false);
           }}
           onClose={() => setShowTimeline(false)}
+        />
+      )}
+
+      {/* Summary Modal */}
+      {showSummary && (
+        <SummaryView
+          memories={memories}
+          onClose={() => setShowSummary(false)}
+          onSaveAsMemory={(content) => {
+            // Save as a new memory with today's date
+            const today = new Date().toISOString().split('T')[0];
+            const summaryPath = `memory/${today}-summary.md`;
+            
+            fetch('/api/memories', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                path: summaryPath,
+                content,
+                type: 'daily',
+              }),
+            }).then(() => fetchData());
+          }}
         />
       )}
 
