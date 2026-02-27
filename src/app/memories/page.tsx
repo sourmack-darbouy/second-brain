@@ -4,8 +4,9 @@ import { useEffect, useState, Suspense, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 
-// Dynamic import for VoiceCapture (client-only)
+// Dynamic imports for client-only components
 const VoiceCapture = dynamic(() => import('@/components/VoiceCapture'), { ssr: false });
+const MemoryTimeline = dynamic(() => import('@/components/MemoryTimeline'), { ssr: false });
 
 interface Memory {
   name: string;
@@ -184,6 +185,9 @@ function MemoriesContent() {
   
   // Voice capture
   const [showVoiceCapture, setShowVoiceCapture] = useState(false);
+  
+  // Timeline view
+  const [showTimeline, setShowTimeline] = useState(false);
 
   // Fetch all data
   const fetchData = useCallback(async () => {
@@ -735,6 +739,12 @@ function MemoriesContent() {
           >
             🎙️ Voice
           </button>
+          <button 
+            onClick={() => setShowTimeline(true)} 
+            className="bg-teal-600 hover:bg-teal-700 px-3 py-2 rounded-lg font-medium transition text-sm flex items-center gap-1"
+          >
+            📅 Timeline
+          </button>
           <button onClick={createDailyNote} className="bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm">
             + Today
           </button>
@@ -991,6 +1001,19 @@ function MemoriesContent() {
           onSave={handleVoiceSave}
           onClose={() => setShowVoiceCapture(false)}
           date={new Date().toISOString().split('T')[0]}
+        />
+      )}
+
+      {/* Timeline Modal */}
+      {showTimeline && (
+        <MemoryTimeline
+          memories={memories}
+          onDayClick={(date) => {
+            const mem = memories.find(m => m.path === `memory/${date}.md` || m.name === date);
+            if (mem) selectMemory(mem);
+            setShowTimeline(false);
+          }}
+          onClose={() => setShowTimeline(false)}
         />
       )}
 
