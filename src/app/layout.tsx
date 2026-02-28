@@ -4,6 +4,12 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Second Brain',
   description: 'Your personal knowledge management system',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Second Brain',
+  },
 };
 
 export const viewport: Viewport = {
@@ -74,6 +80,13 @@ function MobileNav() {
   return (
     <div className="sm:hidden flex gap-1">
       <a 
+        href="/quick" 
+        className="p-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition"
+        title="Quick Add"
+      >
+        ⚡
+      </a>
+      <a 
         href="/" 
         className="p-2 rounded-lg hover:bg-zinc-800 transition"
         title="Dashboard"
@@ -81,25 +94,11 @@ function MobileNav() {
         🏠
       </a>
       <a 
-        href="/tasks" 
-        className="p-2 rounded-lg hover:bg-zinc-800 transition"
-        title="Tasks"
-      >
-        ✅
-      </a>
-      <a 
         href="/memories" 
         className="p-2 rounded-lg hover:bg-zinc-800 transition"
         title="Memories"
       >
         📝
-      </a>
-      <a 
-        href="/documents" 
-        className="p-2 rounded-lg hover:bg-zinc-800 transition"
-        title="Documents"
-      >
-        📄
       </a>
       <a 
         href="/contacts" 
