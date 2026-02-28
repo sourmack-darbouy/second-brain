@@ -10,6 +10,7 @@ const MemoryTimeline = dynamic(() => import('@/components/MemoryTimeline'), { ss
 const SummaryView = dynamic(() => import('@/components/SummaryView'), { ssr: false });
 const AdvancedSearch = dynamic(() => import('@/components/AdvancedSearch'), { ssr: false });
 const WikiLinksPanel = dynamic(() => import('@/components/WikiLinksPanel'), { ssr: false });
+const MemoryPrompts = dynamic(() => import('@/components/MemoryPrompts'), { ssr: false });
 
 interface Memory {
   name: string;
@@ -197,6 +198,26 @@ function MemoriesContent() {
   
   // Advanced search
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
+  
+  // Memory prompts
+  const [showPrompts, setShowPrompts] = useState(false);
+
+  // Check if we should show daily prompt (after 6pm local time)
+  useEffect(() => {
+    const lastPromptDate = localStorage.getItem('lastPromptDate');
+    const today = new Date().toISOString().split('T')[0];
+    const hour = new Date().getHours();
+    
+    // Show prompt if it's after 6pm and we haven't prompted today
+    if (hour >= 18 && lastPromptDate !== today && memories.length > 0) {
+      // Check if today's memory exists and is sparse
+      const todayMemory = memories.find(m => m.path === `memory/${today}.md`);
+      if (!todayMemory || todayMemory.content.length < 200) {
+        setShowPrompts(true);
+        localStorage.setItem('lastPromptDate', today);
+      }
+    }
+  }, [memories]);
 
   // Keyboard shortcut for search (Cmd/Ctrl + K)
   useEffect(() => {
@@ -782,6 +803,12 @@ function MemoriesContent() {
           >
             📊 Summary
           </button>
+          <button 
+            onClick={() => setShowPrompts(true)} 
+            className="bg-pink-600 hover:bg-pink-700 px-3 py-2 rounded-lg font-medium transition text-sm flex items-center gap-1"
+          >
+            💭 Reflect
+          </button>
           <button onClick={createDailyNote} className="bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm">
             + Today
           </button>
@@ -1113,6 +1140,29 @@ function MemoriesContent() {
             if (mem) selectMemory(mem);
           }}
           onClose={() => setShowAdvancedSearch(false)}
+        />
+      )}
+
+      {/* Memory Prompts Modal */}
+      {showPrompts && (
+        <MemoryPrompts
+          onSave={async (content) => {
+            const today = new Date().toISOString().split('T')[0];
+            const reflectionPath = `memory/${today}-reflection.md`;
+            
+            await fetch('/api/memories', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                path: reflectionPath,
+                content,
+                type: 'daily',
+              }),
+            });
+            
+            fetchData();
+          }}
+          onClose={() => setShowPrompts(false)}
         />
       )}
 
