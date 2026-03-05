@@ -101,11 +101,25 @@ function MobileNav() {
         📝
       </a>
       <a 
+        href="/documents" 
+        className="p-2 rounded-lg hover:bg-zinc-800 transition"
+        title="Documents"
+      >
+        📄
+      </a>
+      <a 
         href="/contacts" 
         className="p-2 rounded-lg hover:bg-zinc-800 transition"
         title="Contacts"
       >
         👥
+      </a>
+      <a 
+        href="/tasks" 
+        className="p-2 rounded-lg hover:bg-zinc-800 transition"
+        title="Tasks"
+      >
+        ✅
       </a>
     </div>
   );
