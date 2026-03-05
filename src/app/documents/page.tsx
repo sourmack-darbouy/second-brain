@@ -24,6 +24,7 @@ function DocumentsContent() {
   const [newDocContent, setNewDocContent] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchDocuments = async () => {
     try {
@@ -208,6 +209,16 @@ function DocumentsContent() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  // Filter documents by search query
+  const filteredDocuments = documents.filter(doc => {
+    if (!searchQuery) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      doc.name.toLowerCase().includes(query) ||
+      doc.type.toLowerCase().includes(query)
+    );
+  });
+
   if (loading) {
     return <div className="text-zinc-400">Loading documents...</div>;
   }
@@ -243,6 +254,26 @@ function DocumentsContent() {
             {showAddForm ? 'Cancel' : '+ Text'}
           </button>
         </div>
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <input
+          type="text"
+          placeholder="Search documents by name or type..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-zinc-100 pl-10"
+        />
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">🔍</span>
+        {searchQuery && (
+          <button 
+            onClick={() => setSearchQuery('')} 
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white"
+          >
+            ✕
+          </button>
+        )}
       </div>
 
       {/* Add Document Form */}
@@ -287,7 +318,7 @@ function DocumentsContent() {
         `}>
           <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-zinc-300 text-sm sm:text-base">
-              All Files ({documents.length})
+              {searchQuery ? `Results (${filteredDocuments.length})` : `All Files (${documents.length})`}
             </h3>
             <button
               onClick={() => setShowSidebar(false)}
@@ -296,11 +327,13 @@ function DocumentsContent() {
               ✕
             </button>
           </div>
-          {documents.length === 0 ? (
-            <p className="text-zinc-500 text-sm">No documents yet.</p>
+          {filteredDocuments.length === 0 ? (
+            <p className="text-zinc-500 text-sm">
+              {searchQuery ? 'No documents match your search.' : 'No documents yet.'}
+            </p>
           ) : (
             <div className="space-y-1 max-h-[60vh] lg:max-h-[70vh] overflow-auto">
-              {documents.map(doc => (
+              {filteredDocuments.map(doc => (
                 <button
                   key={doc.path}
                   onClick={() => loadDocument(doc.path)}

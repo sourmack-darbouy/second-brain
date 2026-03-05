@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { DesktopNav, MobileNav } from '@/components/Navigation';
 
 export const metadata: Metadata = {
   title: 'Second Brain',
@@ -50,77 +51,9 @@ function Header() {
           <span className="hidden xs:inline">Second Brain</span>
         </h1>
         
-        {/* Desktop Nav */}
-        <nav className="hidden sm:flex gap-4 lg:gap-6">
-          <a href="/" className="text-zinc-400 hover:text-zinc-100 transition text-sm lg:text-base">
-            Dashboard
-          </a>
-          <a href="/memories" className="text-zinc-400 hover:text-zinc-100 transition text-sm lg:text-base">
-            Memories
-          </a>
-          <a href="/documents" className="text-zinc-400 hover:text-zinc-100 transition text-sm lg:text-base">
-            Documents
-          </a>
-          <a href="/contacts" className="text-zinc-400 hover:text-zinc-100 transition text-sm lg:text-base">
-            Contacts
-          </a>
-          <a href="/tasks" className="text-zinc-400 hover:text-zinc-100 transition text-sm lg:text-base">
-            Tasks
-          </a>
-        </nav>
-
-        {/* Mobile Nav */}
+        <DesktopNav />
         <MobileNav />
       </div>
     </header>
-  );
-}
-
-function MobileNav() {
-  return (
-    <div className="sm:hidden flex gap-1">
-      <a 
-        href="/quick" 
-        className="p-2 rounded-lg bg-blue-600 hover:bg-blue-700 transition"
-        title="Quick Add"
-      >
-        ⚡
-      </a>
-      <a 
-        href="/" 
-        className="p-2 rounded-lg hover:bg-zinc-800 transition"
-        title="Dashboard"
-      >
-        🏠
-      </a>
-      <a 
-        href="/memories" 
-        className="p-2 rounded-lg hover:bg-zinc-800 transition"
-        title="Memories"
-      >
-        📝
-      </a>
-      <a 
-        href="/documents" 
-        className="p-2 rounded-lg hover:bg-zinc-800 transition"
-        title="Documents"
-      >
-        📄
-      </a>
-      <a 
-        href="/contacts" 
-        className="p-2 rounded-lg hover:bg-zinc-800 transition"
-        title="Contacts"
-      >
-        👥
-      </a>
-      <a 
-        href="/tasks" 
-        className="p-2 rounded-lg hover:bg-zinc-800 transition"
-        title="Tasks"
-      >
-        ✅
-      </a>
-    </div>
   );
 }

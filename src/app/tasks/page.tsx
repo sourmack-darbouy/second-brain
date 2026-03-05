@@ -9,6 +9,7 @@ interface Task {
   urgent: boolean;
   important: boolean;
   created: string;
+  dueDate?: string;
   quadrant?: 'do' | 'decide' | 'delegate' | 'delete';
 }
 
@@ -26,8 +27,10 @@ export default function TasksPage() {
   const [newTask, setNewTask] = useState('');
   const [newUrgent, setNewUrgent] = useState(false);
   const [newImportant, setNewImportant] = useState(true);
+  const [newDueDate, setNewDueDate] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -69,12 +72,14 @@ export default function TasksPage() {
       urgent: newUrgent,
       important: newImportant,
       created: new Date().toISOString(),
+      dueDate: newDueDate || undefined,
     };
 
     saveTasks([...tasks, task]);
     setNewTask('');
     setNewUrgent(false);
     setNewImportant(true);
+    setNewDueDate('');
   };
 
   const toggleTask = (id: string) => {
@@ -210,6 +215,26 @@ export default function TasksPage() {
               <span className="text-zinc-300 text-sm">Urgent</span>
             </label>
 
+            {/* Due Date */}
+            <div className="flex items-center gap-2">
+              <label className="text-zinc-400 text-sm">Due:</label>
+              <input
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-sm text-zinc-300"
+              />
+              {newDueDate && (
+                <button
+                  type="button"
+                  onClick={() => setNewDueDate('')}
+                  className="text-zinc-500 hover:text-zinc-300 text-sm"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
             {/* Preview quadrant */}
             <div className="ml-auto text-sm font-medium">
               {newImportant && newUrgent && (
@@ -295,75 +320,83 @@ export default function TasksPage() {
       {/* Completed */}
       {completedTasks.length > 0 && (
         <div className="bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800">
-          <h3 className="font-semibold mb-3 text-zinc-400 flex items-center gap-2">
-            <span>✅</span>
-            Completed ({completedTasks.length})
-          </h3>
-          <div className="space-y-2">
-            {completedTasks.map(task => (
-              <div
-                key={task.id}
-                className="border-l-4 border-zinc-600 bg-zinc-800/50 p-2.5 sm:p-3 rounded-r"
-              >
-                {editingId === task.id ? (
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={editText}
-                      onChange={(e) => setEditText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') saveEdit(task.id);
-                        if (e.key === 'Escape') cancelEdit();
-                      }}
-                      className="flex-1 bg-zinc-700 border border-zinc-600 rounded px-2 py-1 text-sm"
-                      autoFocus
-                    />
-                    <button
-                      onClick={() => saveEdit(task.id)}
-                      className="text-green-400 hover:text-green-300 px-2 py-1 text-sm font-medium"
-                    >
-                      Save
-                    </button>
-                    <button
-                      onClick={cancelEdit}
-                      className="text-zinc-400 hover:text-zinc-300 px-2 py-1 text-sm"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-start gap-2">
-                    <input
-                      type="checkbox"
-                      checked={task.completed}
-                      onChange={() => toggleTask(task.id)}
-                      className="mt-0.5 sm:mt-1 w-5 h-5"
-                    />
-                    <span 
-                      className="flex-1 line-through text-zinc-500 text-sm sm:text-base cursor-pointer"
-                      onClick={() => startEdit(task)}
-                      title="Click to edit"
-                    >
-                      {task.text}
-                    </span>
-                    <button
-                      onClick={() => startEdit(task)}
-                      className="text-zinc-500 hover:text-blue-400 p-1"
-                      title="Edit"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      onClick={() => deleteTask(task.id)}
-                      className="text-zinc-500 hover:text-red-400 p-1"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+          <button
+            onClick={() => setShowCompleted(!showCompleted)}
+            className="w-full font-semibold mb-3 text-zinc-400 flex items-center justify-between hover:text-zinc-300 transition"
+          >
+            <span className="flex items-center gap-2">
+              <span>✅</span>
+              Completed ({completedTasks.length})
+            </span>
+            <span className="text-lg">{showCompleted ? '▼' : '▶'}</span>
+          </button>
+          {showCompleted && (
+            <div className="space-y-2">
+              {completedTasks.map(task => (
+                <div
+                  key={task.id}
+                  className="border-l-4 border-zinc-600 bg-zinc-800/50 p-2.5 sm:p-3 rounded-r"
+                >
+                  {editingId === task.id ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveEdit(task.id);
+                          if (e.key === 'Escape') cancelEdit();
+                        }}
+                        className="flex-1 bg-zinc-700 border border-zinc-600 rounded px-2 py-1 text-sm"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => saveEdit(task.id)}
+                        className="text-green-400 hover:text-green-300 px-2 py-1 text-sm font-medium"
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        className="text-zinc-400 hover:text-zinc-300 px-2 py-1 text-sm"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={task.completed}
+                        onChange={() => toggleTask(task.id)}
+                        className="mt-0.5 sm:mt-1 w-5 h-5"
+                      />
+                      <span 
+                        className="flex-1 line-through text-zinc-500 text-sm sm:text-base cursor-pointer"
+                        onClick={() => startEdit(task)}
+                        title="Click to edit"
+                      >
+                        {task.text}
+                      </span>
+                      <button
+                        onClick={() => startEdit(task)}
+                        className="text-zinc-500 hover:text-blue-400 p-1"
+                        title="Edit"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => deleteTask(task.id)}
+                        className="text-zinc-500 hover:text-red-400 p-1"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -541,17 +574,27 @@ function TaskItem({
               title="Click to edit"
             >
               {task.text}
+              {task.dueDate && (
+                <span className={`ml-2 text-xs ${
+                  !task.completed && new Date(task.dueDate) < new Date() 
+                    ? 'text-red-400 font-medium' 
+                    : 'text-zinc-500'
+                }`}>
+                  📅 {new Date(task.dueDate).toLocaleDateString()}
+                  {!task.completed && new Date(task.dueDate) < new Date() && ' (overdue)'}
+                </span>
+              )}
             </span>
             <button
               onClick={() => onStartEdit(task)}
-              className="text-zinc-500 hover:text-blue-400 opacity-0 group-hover:opacity-100 active:opacity-100 p-1 -mr-1"
+              className="text-zinc-500 hover:text-blue-400 sm:opacity-0 sm:group-hover:opacity-100 p-1 -mr-1"
               title="Edit"
             >
               ✏️
             </button>
             <button
               onClick={() => onDelete(task.id)}
-              className="text-zinc-500 hover:text-red-400 opacity-0 group-hover:opacity-100 active:opacity-100 p-1 -mr-1"
+              className="text-zinc-500 hover:text-red-400 sm:opacity-0 sm:group-hover:opacity-100 p-1 -mr-1"
               title="Delete"
             >
               ✕
