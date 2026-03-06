@@ -372,11 +372,11 @@ function MemoriesContent() {
     }
 
     // Trigger autosave after 2 seconds of inactivity
-    if (autosaveTimeout.current) {
-      clearTimeout(autosaveTimeout.current);
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
     }
     
-    autosaveTimeout.current = setTimeout(() => {
+    autosaveTimeoutRef.current = setTimeout(() => {
       if (editing && editContent.trim() && selectedMemory) {
         performAutosave();
       }
@@ -512,14 +512,15 @@ function MemoriesContent() {
     if (!editing || !selectedMemory || !editContent.trim()) return;
     
     // Clear existing timeout
-    if (autosaveTimeout.current) {
-      clearTimeout(autosaveTimeout.current);
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
     }
     
     // Set saving state
     setIsSaving(true);
     
-    // Save after 2 seconds of    autosaveTimeout.current = setTimeout(async () => {
+    // Save after 2 seconds of inactivity
+    autosaveTimeoutRef.current = setTimeout(async () => {
       try {
         await fetch('/api/memories', {
           method: 'POST',
@@ -876,19 +877,19 @@ function MemoriesContent() {
           {/* Filters Dropdown */}
           <DropdownMenu label="Filters" icon="🔽">
             <button 
-              onClick={() => { setShowAdvancedSearch(true); setIsOpen(false); }}
+              onClick={() => setShowAdvancedSearch(true)}
               className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
             >
               🔍 Search
             </button>
             <button 
-              onClick={() => { setShowTagSidebar(!showTagSidebar); setIsOpen(false); }}
+              onClick={() => setShowTagSidebar(!showTagSidebar)}
               className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
             >
               🏷️ Tags
             </button>
             <button 
-              onClick={() => { setShowActionItems(!showActionItems); setIsOpen(false); }}
+              onClick={() => setShowActionItems(!showActionItems)}
               className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
             >
               ✓ Actions ({actionItems.length})
@@ -898,25 +899,25 @@ function MemoriesContent() {
           {/* Tools Dropdown */}
           <DropdownMenu label="Tools" icon="🔽">
             <button 
-              onClick={() => { setShowVoiceCapture(true); setIsOpen(false); }}
+              onClick={() => setShowVoiceCapture(true)}
               className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
             >
               🎙️ Voice
             </button>
             <button 
-              onClick={() => { setShowTimeline(true); setIsOpen(false); }}
+              onClick={() => setShowTimeline(true)}
               className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
             >
               📅 Timeline
             </button>
             <button 
-              onClick={() => { setShowSummary(true); setIsOpen(false); }}
+              onClick={() => setShowSummary(true)}
               className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
             >
               📊 Summary
             </button>
             <button 
-              onClick={() => { setShowPrompts(true); setIsOpen(false); }}
+              onClick={() => setShowPrompts(true)}
               className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
             >
                 💭 Reflect

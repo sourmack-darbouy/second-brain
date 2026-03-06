@@ -62,6 +62,7 @@ function ContactsContent() {
   const [duplicateWarning, setDuplicateWarning] = useState<{ duplicates: { field: string; contact: Contact }[]; data: any } | null>(null);
   const [bulkContacts, setBulkContacts] = useState<Partial<Contact>[]>([]);
   const [showBulkImport, setShowBulkImport] = useState(false);
+  const [showAdvancedFields, setShowAdvancedFields] = useState(false);
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0, duplicates: 0 });
   const [mergeMode, setMergeMode] = useState(false);

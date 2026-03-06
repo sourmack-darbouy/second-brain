@@ -24,28 +24,41 @@ interface Document {
   type: string;
 }
 
+interface CalendarEvent {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  location?: string;
+  isAllDay: boolean;
+}
+
 export default function Dashboard() {
   const [memories, setMemories] = useState<Memory[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [recentDocs, setRecentDocs] = useState<Document[]>([]);
+  const [todayEvents, setTodayEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [memRes, taskRes, docRes] = await Promise.all([
+        const [memRes, taskRes, docRes, calRes] = await Promise.all([
           fetch('/api/memories'),
           fetch('/api/tasks'),
           fetch('/api/documents'),
+          fetch('/api/calendar?range=today'),
         ]);
         
         const memData = await memRes.json();
         const taskData = await taskRes.json();
         const docData = await docRes.json();
+        const calData = await calRes.json();
 
         setMemories(memData.memories || []);
         setTasks(taskData.tasks || []);
         setRecentDocs((docData.documents || []).slice(0, 10));
+        setTodayEvents(calData.events || []);
       } catch (error) {
         console.error('Failed to fetch data:', error);
       } finally {
@@ -123,6 +136,51 @@ export default function Dashboard() {
           <div className="text-xl sm:text-2xl font-bold">{recentDocs.length}+</div>
         </a>
       </div>
+
+      {/* Today's Schedule */}
+      {todayEvents.length > 0 && (
+        <div className="bg-zinc-900 rounded-lg p-4 sm:p-6 border border-zinc-800">
+          <div className="flex items-center justify-between mb-3 sm:mb-4">
+            <h3 className="text-base sm:text-lg font-semibold flex items-center gap-2">
+              <span>📅</span> Today's Schedule
+            </h3>
+            <a href="/calendar" className="text-blue-400 hover:text-blue-300 text-sm">
+              View Calendar →
+            </a>
+          </div>
+          <div className="space-y-2">
+            {todayEvents.slice(0, 5).map(event => {
+              const startTime = new Date(event.start);
+              const timeStr = event.isAllDay 
+                ? 'All day'
+                : startTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+              
+              return (
+                <div key={event.id} className="flex items-start gap-3 p-2 hover:bg-zinc-800 rounded-lg transition">
+                  <div className="text-sm font-medium text-blue-400 min-w-[60px]">
+                    {timeStr}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm sm:text-base truncate">
+                      {event.title}
+                    </div>
+                    {event.location && (
+                      <div className="text-xs text-zinc-500 truncate">
+                        📍 {event.location}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {todayEvents.length > 5 && (
+              <div className="text-sm text-zinc-400 text-center pt-2">
+                +{todayEvents.length - 5} more events
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Tasks Overview */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">

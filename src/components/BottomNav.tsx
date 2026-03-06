@@ -12,10 +12,10 @@ export function BottomNav() {
   
   const tabs = [
     { href: '/', label: 'Home', icon: '🏠' },
+    { href: '/calendar', label: 'Calendar', icon: '📅' },
     { href: '/memories', label: 'Notes', icon: '📝' },
     { href: '/tasks', label: 'Tasks', icon: '✅' },
     { href: '/contacts', label: 'Contacts', icon: '👥' },
-    { href: '/documents', label: 'Docs', icon: '📄' },
   ];
   
   return (

@@ -7,6 +7,7 @@ export function DesktopNav() {
   
   const links = [
     { href: '/', label: 'Dashboard', icon: '🏠' },
+    { href: '/calendar', label: 'Calendar', icon: '📅' },
     { href: '/memories', label: 'Memories', icon: '📝' },
     { href: '/documents', label: 'Documents', icon: '📄' },
     { href: '/contacts', label: 'Contacts', icon: '👥' },
