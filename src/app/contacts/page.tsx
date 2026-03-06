@@ -1526,7 +1526,7 @@ function ContactsContent() {
 
       {/* Merge Action Bar */}
       {mergeMode && selectedForMerge.length > 0 && (
-        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 bg-zinc-800 rounded-lg p-4 flex items-center gap-4 shadow-lg border border-zinc-700 z-50">
+        <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-zinc-800 rounded-lg p-4 flex items-center gap-4 shadow-lg border border-zinc-700 z-50 sm:bottom-4">
           <span className="text-zinc-300">
             {selectedForMerge.length} contact{selectedForMerge.length > 1 ? 's' : ''} selected
           </span>

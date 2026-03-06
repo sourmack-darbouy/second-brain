@@ -1296,7 +1296,7 @@ function MemoriesContent() {
       {/* Mobile toggle */}
       <button
         onClick={() => setShowSidebar(!showSidebar)}
-        className="sm:hidden fixed bottom-4 right-4 bg-blue-600 text-white p-3 rounded-full shadow-lg z-50"
+        className="sm:hidden fixed bottom-24 right-4 bg-blue-600 text-white p-3 rounded-full shadow-lg z-50"
       >
         📂
       </button>
