@@ -79,6 +79,8 @@ function ContactsContent() {
   
   // Memory mentions
   const [memoryMentions, setMemoryMentions] = useState<{ memoryDate: string; memoryPath: string; context: string; timestamp: string }[]>([]);
+  const [contactEmails, setContactEmails] = useState<any[]>([]);
+  const [loadingEmails, setLoadingEmails] = useState(false);
   const [loadingMentions, setLoadingMentions] = useState(false);
 
   // Parse business card text to extract contact info
@@ -388,6 +390,26 @@ function ContactsContent() {
     }
   };
 
+  // Fetch emails for a contact
+  const fetchContactEmails = async (email: string) => {
+    if (!email) {
+      setContactEmails([]);
+      return;
+    }
+    
+    setLoadingEmails(true);
+    try {
+      const res = await fetch(`/api/emails?contact=${encodeURIComponent(email)}`);
+      const data = await res.json();
+      setContactEmails(data.emails || []);
+    } catch (error) {
+      console.error('Failed to fetch contact emails:', error);
+      setContactEmails([]);
+    } finally {
+      setLoadingEmails(false);
+    }
+  };
+
   useEffect(() => {
     fetchContacts();
   }, []);
@@ -398,6 +420,13 @@ function ContactsContent() {
       fetchMemoryMentions(selectedContact.firstName, selectedContact.lastName);
     } else {
       setMemoryMentions([]);
+    }
+    
+    // Fetch emails for contact
+    if (selectedContact?.emailPrimary) {
+      fetchContactEmails(selectedContact.emailPrimary);
+    } else {
+      setContactEmails([]);
     }
   }, [selectedContact?.id]);
 
@@ -1414,6 +1443,51 @@ function ContactsContent() {
                       </p>
                     </a>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Recent Emails Section */}
+          {selectedContact && selectedContact.emailPrimary && (
+            <div className="mt-4">
+              <label className="block text-sm text-zinc-400 mb-2">
+                📧 Recent Emails
+              </label>
+              {loadingEmails ? (
+                <div className="text-zinc-500 text-sm">Loading emails...</div>
+              ) : contactEmails.length === 0 ? (
+                <div className="text-zinc-500 text-sm">
+                  No emails from {selectedContact.emailPrimary} stored yet.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-auto">
+                  {contactEmails.slice(0, 5).map((email, i) => (
+                    <div
+                      key={i}
+                      className="bg-zinc-800 hover:bg-zinc-700 rounded-lg p-3 transition"
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium text-purple-400 truncate flex-1">
+                          {email.subject}
+                        </span>
+                        <span className="text-xs text-zinc-500 ml-2 flex-shrink-0">
+                          {new Date(email.date).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-400 line-clamp-2">
+                        {email.snippet}
+                      </p>
+                    </div>
+                  ))}
+                  {contactEmails.length > 5 && (
+                    <a
+                      href={`/emails?contact=${encodeURIComponent(selectedContact.emailPrimary)}`}
+                      className="block text-center text-sm text-blue-400 hover:text-blue-300 py-2"
+                    >
+                      View all {contactEmails.length} emails →
+                    </a>
+                  )}
                 </div>
               )}
             </div>
