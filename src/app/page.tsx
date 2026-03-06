@@ -82,24 +82,46 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* Quick Actions */}
+      <div className="flex flex-wrap gap-2 sm:gap-3">
+        <a 
+          href="/tasks" 
+          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 px-4 py-2.5 rounded-lg font-medium transition text-sm sm:text-base"
+        >
+          <span>✅</span> Add Task
+        </a>
+        <a 
+          href="/quick" 
+          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 active:bg-purple-800 px-4 py-2.5 rounded-lg font-medium transition text-sm sm:text-base"
+        >
+          <span>📝</span> Quick Note
+        </a>
+        <a 
+          href="/contacts" 
+          className="flex items-center gap-2 bg-teal-600 hover:bg-teal-700 active:bg-teal-800 px-4 py-2.5 rounded-lg font-medium transition text-sm sm:text-base"
+        >
+          <span>👥</span> Add Contact
+        </a>
+      </div>
+
       {/* Stats - 2x2 grid on mobile, 4 cols on tablet+ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        <div className="bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800">
+        <a href="/memories" className="bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800 hover:bg-zinc-800 transition cursor-pointer">
           <div className="text-zinc-400 text-xs sm:text-sm">Memories</div>
           <div className="text-xl sm:text-2xl font-bold">{memories.length}</div>
-        </div>
-        <div className="bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800">
+        </a>
+        <a href="/tasks" className="bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800 hover:bg-zinc-800 transition cursor-pointer">
           <div className="text-zinc-400 text-xs sm:text-sm">Active Tasks</div>
           <div className="text-xl sm:text-2xl font-bold">{incompleteTasks.length}</div>
-        </div>
-        <div className="bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800">
+        </a>
+        <a href="/tasks" className="bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800 hover:bg-zinc-800 transition cursor-pointer">
           <div className="text-zinc-400 text-xs sm:text-sm">Completed</div>
           <div className="text-xl sm:text-2xl font-bold text-green-500">{completedTasks.length}</div>
-        </div>
-        <div className="bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800">
+        </a>
+        <a href="/documents" className="bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800 hover:bg-zinc-800 transition cursor-pointer">
           <div className="text-zinc-400 text-xs sm:text-sm">Documents</div>
           <div className="text-xl sm:text-2xl font-bold">{recentDocs.length}+</div>
-        </div>
+        </a>
       </div>
 
       {/* Tasks Overview */}

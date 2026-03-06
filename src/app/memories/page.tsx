@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
+import { DropdownMenu } from '@/components/DropdownMenu';
 
 // Dynamic imports for client-only components
 const VoiceCapture = dynamic(() => import('@/components/VoiceCapture'), { ssr: false });
@@ -201,6 +202,11 @@ function MemoriesContent() {
   
   // Memory prompts
   const [showPrompts, setShowPrompts] = useState(false);
+  
+  // Autosave state
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Check if we should show daily prompt (after 6pm local time)
   useEffect(() => {
@@ -364,6 +370,57 @@ function MemoriesContent() {
     } else {
       setShowMentionDropdown(false);
     }
+
+    // Trigger autosave after 2 seconds of inactivity
+    if (autosaveTimeout.current) {
+      clearTimeout(autosaveTimeout.current);
+    }
+    
+    autosaveTimeout.current = setTimeout(() => {
+      if (editing && editContent.trim() && selectedMemory) {
+        performAutosave();
+      }
+    }, 2000);
+  };
+
+  // Autosave function
+  const performAutosave = async () => {
+    if (!selectedMemory || !editContent.trim() || saving) return;
+    
+    setIsSaving(true);
+    try {
+      await fetch('/api/memories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          path: selectedMemory.path,
+          content: editContent,
+          type: selectedMemory.type,
+          attachments: memoryAttachments,
+        }),
+      });
+
+      // Reindex mentions
+      await fetch('/api/memories-enhanced', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'reindex',
+          memoryPath: selectedMemory.path,
+          content: editContent,
+        }),
+      });
+
+      setSelectedMemory({ ...selectedMemory, content: editContent, attachments: memoryAttachments });
+      setLastSaved(new Date());
+      
+      // Re-fetch data to update tags/mentions
+      fetchData();
+    } catch (error) {
+      console.error('Failed to autosave:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Insert mention
@@ -449,6 +506,52 @@ function MemoriesContent() {
       setSaving(false);
     }
   };
+
+  // Autosave function with debounce
+  const triggerAutosave = useCallback(() => {
+    if (!editing || !selectedMemory || !editContent.trim()) return;
+    
+    // Clear existing timeout
+    if (autosaveTimeout.current) {
+      clearTimeout(autosaveTimeout.current);
+    }
+    
+    // Set saving state
+    setIsSaving(true);
+    
+    // Save after 2 seconds of    autosaveTimeout.current = setTimeout(async () => {
+      try {
+        await fetch('/api/memories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            path: selectedMemory.path,
+            content: editContent,
+            type: selectedMemory.type,
+            attachments: memoryAttachments,
+          }),
+        });
+
+        // Reindex mentions
+        await fetch('/api/memories-enhanced', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'reindex',
+            memoryPath: selectedMemory.path,
+            content: editContent,
+          }),
+        });
+
+        setSelectedMemory({ ...selectedMemory, content: editContent, attachments: memoryAttachments });
+        setLastSaved(new Date());
+      } catch (error) {
+        console.error('Autosave failed:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 2000);
+  }, [editing, editContent, selectedMemory, memoryAttachments]);
 
   const createDailyNote = async () => {
     const today = new Date().toISOString().split('T')[0];
@@ -770,45 +873,56 @@ function MemoriesContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-2xl sm:text-3xl font-bold">Memories</h2>
         <div className="flex flex-wrap gap-2">
-          <button 
-            onClick={() => setShowAdvancedSearch(true)} 
-            className="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg font-medium transition text-sm flex items-center gap-1"
-          >
-            🔍 Search
-          </button>
-          <button 
-            onClick={() => setShowTagSidebar(!showTagSidebar)} 
-            className="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg font-medium transition text-sm"
-          >
-            🏷️ Tags
-          </button>
-          <button onClick={() => setShowActionItems(!showActionItems)} className="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg font-medium transition text-sm">
-            ✓ Actions ({actionItems.length})
-          </button>
-          <button 
-            onClick={() => setShowVoiceCapture(true)} 
-            className="bg-purple-600 hover:bg-purple-700 px-3 py-2 rounded-lg font-medium transition text-sm flex items-center gap-1"
-          >
-            🎙️ Voice
-          </button>
-          <button 
-            onClick={() => setShowTimeline(true)} 
-            className="bg-teal-600 hover:bg-teal-700 px-3 py-2 rounded-lg font-medium transition text-sm flex items-center gap-1"
-          >
-            📅 Timeline
-          </button>
-          <button 
-            onClick={() => setShowSummary(true)} 
-            className="bg-amber-600 hover:bg-amber-700 px-3 py-2 rounded-lg font-medium transition text-sm flex items-center gap-1"
-          >
-            📊 Summary
-          </button>
-          <button 
-            onClick={() => setShowPrompts(true)} 
-            className="bg-pink-600 hover:bg-pink-700 px-3 py-2 rounded-lg font-medium transition text-sm flex items-center gap-1"
-          >
-            💭 Reflect
-          </button>
+          {/* Filters Dropdown */}
+          <DropdownMenu label="Filters" icon="🔽">
+            <button 
+              onClick={() => { setShowAdvancedSearch(true); setIsOpen(false); }}
+              className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
+            >
+              🔍 Search
+            </button>
+            <button 
+              onClick={() => { setShowTagSidebar(!showTagSidebar); setIsOpen(false); }}
+              className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
+            >
+              🏷️ Tags
+            </button>
+            <button 
+              onClick={() => { setShowActionItems(!showActionItems); setIsOpen(false); }}
+              className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
+            >
+              ✓ Actions ({actionItems.length})
+            </button>
+          </DropdownMenu>
+
+          {/* Tools Dropdown */}
+          <DropdownMenu label="Tools" icon="🔽">
+            <button 
+              onClick={() => { setShowVoiceCapture(true); setIsOpen(false); }}
+              className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
+            >
+              🎙️ Voice
+            </button>
+            <button 
+              onClick={() => { setShowTimeline(true); setIsOpen(false); }}
+              className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
+            >
+              📅 Timeline
+            </button>
+            <button 
+              onClick={() => { setShowSummary(true); setIsOpen(false); }}
+              className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
+            >
+              📊 Summary
+            </button>
+            <button 
+              onClick={() => { setShowPrompts(true); setIsOpen(false); }}
+              className="w-full text-left px-4 py-2 hover:bg-zinc-700 flex items-center gap-2 text-sm"
+            >
+                💭 Reflect
+            </button>
+          </DropdownMenu>
+
           <button onClick={createDailyNote} className="bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm">
             + Today
           </button>
@@ -989,9 +1103,22 @@ function MemoriesContent() {
                       )}
                     </>
                   ) : (
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                       <button onClick={() => { setEditing(false); setEditContent(selectedMemory.content); setMemoryAttachments(selectedMemory.attachments || []); }} className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-zinc-400 text-sm">Cancel</button>
-                      <button onClick={saveMemory} disabled={saving} className="bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg text-white text-sm">{saving ? 'Saving...' : 'Save'}</button>
+                      <button onClick={saveMemory} disabled={saving} className="bg-green-600 hover:bg-green-700 px-3 py-1.5 rounded-lg text-white text-sm">
+                        {saving ? 'Saving...' : 'Save'}
+                      </button>
+                      {isSaving && (
+                        <span className="text-xs text-blue-400 flex items-center gap-1">
+                          <span className="animate-pulse">●</span>
+                          Auto-saving...
+                        </span>
+                      )}
+                      {lastSaved && !isSaving && (
+                        <span className="text-xs text-green-400 flex items-center gap-1">
+                            ✓ Saved {lastSaved.toLocaleTimeString()}
+                          </span>
+                      )}
                     </div>
                   )}
                 </div>

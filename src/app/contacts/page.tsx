@@ -1266,69 +1266,83 @@ function ContactsContent() {
                 className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
               />
             </div>
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">LinkedIn URL</label>
-              <input
-                type="url"
-                value={formData.linkedInUrl || ''}
-                onChange={(e) => setFormData({ ...formData, linkedInUrl: e.target.value })}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
-                placeholder="https://linkedin.com/in/..."
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">City</label>
-              <input
-                type="text"
-                value={formData.city || ''}
-                onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">Country</label>
-              <input
-                type="text"
-                value={formData.country || ''}
-                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">Industry</label>
-              <input
-                type="text"
-                value={formData.industry || ''}
-                onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">How We Met</label>
-              <select
-                value={formData.howMet || ''}
-                onChange={(e) => setFormData({ ...formData, howMet: e.target.value })}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
-              >
-                <option value="">Select...</option>
-                {HOW_MET_OPTIONS.map(opt => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-zinc-400 mb-1">Relationship</label>
-              <select
-                value={formData.relationshipStrength || 'warm'}
-                onChange={(e) => setFormData({ ...formData, relationshipStrength: e.target.value as any })}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
-              >
-                <option value="hot">🔥 Hot</option>
-                <option value="warm">🌤️ Warm</option>
-                <option value="cold">❄️ Cold</option>
-              </select>
-            </div>
           </div>
+          
+          {/* Show More Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowAdvancedFields(!showAdvancedFields)}
+            className="mt-4 text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1"
+          >
+            {showAdvancedFields ? '▼ Hide' : '▶ Show'} advanced fields (LinkedIn, Location, Industry, etc.)
+          </button>
+          
+          {showAdvancedFields && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className="block text-sm text-zinc-400 mb-1">LinkedIn URL</label>
+                <input
+                  type="url"
+                  value={formData.linkedInUrl || ''}
+                  onChange={(e) => setFormData({ ...formData, linkedInUrl: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
+                  placeholder="https://linkedin.com/in/..."
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-zinc-400 mb-1">City</label>
+                <input
+                  type="text"
+                  value={formData.city || ''}
+                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-zinc-400 mb-1">Country</label>
+                <input
+                  type="text"
+                  value={formData.country || ''}
+                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-zinc-400 mb-1">Industry</label>
+                <input
+                  type="text"
+                  value={formData.industry || ''}
+                  onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-zinc-400 mb-1">How We Met</label>
+                <select
+                  value={formData.howMet || ''}
+                  onChange={(e) => setFormData({ ...formData, howMet: e.target.value })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
+                >
+                  <option value="">Select...</option>
+                  {HOW_MET_OPTIONS.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-zinc-400 mb-1">Relationship</label>
+                <select
+                  value={formData.relationshipStrength || 'warm'}
+                  onChange={(e) => setFormData({ ...formData, relationshipStrength: e.target.value as any })}
+                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2"
+                >
+                  <option value="hot">🔥 Hot</option>
+                  <option value="warm">🌤️ Warm</option>
+                  <option value="cold">❄️ Cold</option>
+                </select>
+              </div>
+            </div>
+          )}
           
           <div className="mt-4">
             <label className="block text-sm text-zinc-400 mb-1">Tags</label>
