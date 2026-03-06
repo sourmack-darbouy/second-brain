@@ -115,6 +115,18 @@ export default function Dashboard() {
         >
           <span>👥</span> Add Contact
         </a>
+        <a 
+          href="/insights" 
+          className="flex items-center gap-2 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 px-4 py-2.5 rounded-lg font-medium transition text-sm sm:text-base"
+        >
+          <span>🤖</span> Insights
+        </a>
+        <a 
+          href="/settings" 
+          className="flex items-center gap-2 bg-zinc-700 hover:bg-zinc-600 active:bg-zinc-500 px-4 py-2.5 rounded-lg font-medium transition text-sm sm:text-base"
+        >
+          <span>⚙️</span> Settings
+        </a>
       </div>
 
       {/* Stats - 2x2 grid on mobile, 4 cols on tablet+ */}

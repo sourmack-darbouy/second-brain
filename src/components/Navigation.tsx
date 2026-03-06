@@ -9,9 +9,11 @@ export function DesktopNav() {
     { href: '/', label: 'Dashboard', icon: '🏠' },
     { href: '/calendar', label: 'Calendar', icon: '📅' },
     { href: '/memories', label: 'Memories', icon: '📝' },
+    { href: '/insights', label: 'Insights', icon: '🤖' },
     { href: '/documents', label: 'Documents', icon: '📄' },
     { href: '/contacts', label: 'Contacts', icon: '👥' },
     { href: '/tasks', label: 'Tasks', icon: '✅' },
+    { href: '/settings', label: 'Settings', icon: '⚙️' },
   ];
   
   return (
