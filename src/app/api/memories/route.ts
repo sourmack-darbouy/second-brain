@@ -3,28 +3,17 @@ import { Redis } from '@upstash/redis';
 
 const redis = Redis.fromEnv();
 
-interface Memory {
-  name: string;
-  path: string;
-  content: string;
-  lastModified: string;
-  type: 'long-term' | 'daily';
-  attachments?: string[]; // paths to attached documents
-}
+// Lightweight list endpoint - returns metadata only, no content
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const includeContent = searchParams.get('content') === 'true';
+  const limit = parseInt(searchParams.get('limit') || '0');
+  
+  const memories: any[] = [];
 
-interface Attachment {
-  documentPath: string;
-  memoryPath: string;
-  attachedAt: string;
-}
-
-export async function GET() {
-  const memories: Memory[] = [];
-
-  // Get long-term memory
+  // Get long-term memory (always include, it's small)
   const longTermContent = await redis.get<string>('memories:longterm');
   const longTermMeta = await redis.get<{ lastModified: string }>('memories:longterm:meta');
-  const longTermAttachments = await redis.get<string[]>(`memories:attachments:MEMORY.md`) || [];
   
   if (longTermContent) {
     memories.push({
@@ -33,31 +22,57 @@ export async function GET() {
       content: longTermContent,
       lastModified: longTermMeta?.lastModified || new Date().toISOString(),
       type: 'long-term',
-      attachments: longTermAttachments,
     });
   }
 
-  // Get list of daily notes
+  // Get list of daily notes (just dates)
   const dailyList = await redis.get<string[]>('memories:daily:list') || [];
+  const sortedList = dailyList.sort().reverse();
+  const listToProcess = limit > 0 ? sortedList.slice(0, limit) : sortedList;
   
-  for (const date of dailyList.sort().reverse()) {
-    const content = await redis.get<string>(`memories:daily:${date}`);
-    const meta = await redis.get<{ lastModified: string }>(`memories:daily:${date}:meta`);
-    const attachments = await redis.get<string[]>(`memories:attachments:memory/${date}.md`) || [];
+  if (includeContent) {
+    // Full mode - fetch content (slow for large lists)
+    for (const date of listToProcess) {
+      const content = await redis.get<string>(`memories:daily:${date}`);
+      const meta = await redis.get<{ lastModified: string }>(`memories:daily:${date}:meta`);
+      
+      if (content) {
+        memories.push({
+          name: date,
+          path: `memory/${date}.md`,
+          content,
+          lastModified: meta?.lastModified || new Date().toISOString(),
+          type: 'daily',
+        });
+      }
+    }
+  } else {
+    // Light mode - metadata only (fast)
+    // Batch fetch just the metadata
+    const metaKeys = listToProcess.map(d => `memories:daily:${d}:meta`);
+    const metas = await Promise.all(
+      metaKeys.map(key => redis.get<{ lastModified: string }>(key))
+    );
     
-    if (content) {
+    for (let i = 0; i < listToProcess.length; i++) {
+      const date = listToProcess[i];
+      const meta = metas[i];
+      
       memories.push({
         name: date,
         path: `memory/${date}.md`,
-        content,
         lastModified: meta?.lastModified || new Date().toISOString(),
         type: 'daily',
-        attachments,
+        // No content - load on demand
       });
     }
   }
 
-  return NextResponse.json({ memories });
+  return NextResponse.json({ 
+    memories,
+    total: dailyList.length,
+    mode: includeContent ? 'full' : 'light'
+  });
 }
 
 export async function POST(request: Request) {
@@ -113,24 +128,4 @@ export async function DELETE(request: Request) {
   await redis.set('memories:daily:list', filtered);
   
   return NextResponse.json({ success: true });
-}
-
-// Attach a document to a memory
-export async function PUT(request: Request) {
-  const { memoryPath, documentPath, action } = await request.json();
-  
-  const key = `memories:attachments:${memoryPath}`;
-  const attachments = await redis.get<string[]>(key) || [];
-  
-  if (action === 'attach') {
-    if (!attachments.includes(documentPath)) {
-      attachments.push(documentPath);
-      await redis.set(key, attachments);
-    }
-  } else if (action === 'detach') {
-    const filtered = attachments.filter(p => p !== documentPath);
-    await redis.set(key, filtered);
-  }
-  
-  return NextResponse.json({ success: true, attachments });
 }
