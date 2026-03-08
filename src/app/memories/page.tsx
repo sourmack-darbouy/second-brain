@@ -3,15 +3,6 @@
 import { useEffect, useState, Suspense, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { DropdownMenu } from '@/components/DropdownMenu';
-
-// Dynamic imports for client-only components
-const VoiceCapture = dynamic(() => import('@/components/VoiceCapture'), { ssr: false });
-const MemoryTimeline = dynamic(() => import('@/components/MemoryTimeline'), { ssr: false });
-const SummaryView = dynamic(() => import('@/components/SummaryView'), { ssr: false });
-const AdvancedSearch = dynamic(() => import('@/components/AdvancedSearch'), { ssr: false });
-const WikiLinksPanel = dynamic(() => import('@/components/WikiLinksPanel'), { ssr: false });
-const MemoryPrompts = dynamic(() => import('@/components/MemoryPrompts'), { ssr: false });
 
 interface Memory {
   name: string;
@@ -98,12 +89,7 @@ function extractActionItems(content: string): ActionItem[] {
 }
 
 // Render content with clickable mentions
-function renderContent(
-  content: string,
-  contacts: Contact[],
-  onTagClick: (tag: string) => void,
-  onContactClick: (name: string) => void
-): string {
+function renderContent(content: string, contacts: Contact[]): string {
   if (!content) return '';
   
   let rendered = content
@@ -156,13 +142,15 @@ const TAG_COLORS: Record<string, string> = {
   'abeeway': 'bg-rose-600',
   'apac': 'bg-amber-600',
   'hot-lead': 'bg-red-600',
+  'mining': 'bg-stone-600',
+  'utilities': 'bg-emerald-600',
+  'tracking': 'bg-sky-600',
+  'atex': 'bg-red-700',
 };
 
 function MemoriesContent() {
   const searchParams = useSearchParams();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const mentionDropdownRef = useRef<HTMLDivElement>(null);
   
   const [memories, setMemories] = useState<Memory[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -177,83 +165,44 @@ function MemoriesContent() {
   const [showSidebar, setShowSidebar] = useState(false);
   const [showAttachModal, setShowAttachModal] = useState(false);
   const [memoryAttachments, setMemoryAttachments] = useState<string[]>([]);
-  const [uploading, setUploading] = useState(false);
   
-  // New feature states
+  // Search and filter
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTag, setFilterTag] = useState<string | null>(null);
   const [filterContact, setFilterContact] = useState<string | null>(null);
   const [showTagSidebar, setShowTagSidebar] = useState(true);
-  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
-  const [mentionPosition, setMentionPosition] = useState({ top: 0, left: 0 });
-  const [mentionQuery, setMentionQuery] = useState('');
-  const [cursorPosition, setCursorPosition] = useState(0);
-  const [suggestedTags, setSuggestedTags] = useState<string[]>([]);
-  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
-  const [viewMode, setViewMode] = useState<'preview' | 'source'>('preview');
-  const [showActionItems, setShowActionItems] = useState(false);
   const [dateFilter, setDateFilter] = useState<'all' | 'week' | 'month'>('all');
+  const [viewMode, setViewMode] = useState<'preview' | 'source'>('preview');
+  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
+  const [showActionItems, setShowActionItems] = useState(false);
   
-  // Voice capture
-  const [showVoiceCapture, setShowVoiceCapture] = useState(false);
-  
-  // Timeline view
-  const [showTimeline, setShowTimeline] = useState(false);
-  
-  // Summary view
-  const [showSummary, setShowSummary] = useState(false);
-  
-  // Advanced search
-  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
-  
-  // Memory prompts
-  const [showPrompts, setShowPrompts] = useState(false);
-  
-  // Autosave state
-  const [isSaving, setIsSaving] = useState(false);
-  const [lastSaved, setLastSaved] = useState<Date | null>(null);
-  const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // File upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
 
-  // Fetch memory list (lightweight - no content)
+  // Fetch memory list (lightweight)
   const fetchMemoryList = useCallback(async () => {
     try {
       setLoading(true);
       
-      // Fetch memories list (light mode - fast)
-      const memoriesRes = await fetch('/api/memories');
-      const memoriesData = await memoriesRes.json();
-      
-      // Set memories WITHOUT content (light mode)
-      setMemories(memoriesData.memories || []);
-      
-      // Fetch other data (skip tags - too slow with 396 memories)
-      const [docsRes, contactsRes] = await Promise.all([
+      const [memoriesRes, docsRes, contactsRes] = await Promise.all([
+        fetch('/api/memories'),
         fetch('/api/documents'),
         fetch('/api/contacts'),
       ]);
 
+      const memoriesData = await memoriesRes.json();
       const docsData = await docsRes.json();
       const contactsData = await contactsRes.json();
 
+      setMemories(memoriesData.memories || []);
       setDocuments(docsData.documents || []);
       setContacts(contactsData.contacts || []);
-      // Tags loaded lazily from content when needed
-      setTags([]);
 
-      // Handle URL params
       const filePath = searchParams.get('file');
-      const tagFilter = searchParams.get('tag');
-      const contactFilter = searchParams.get('contact');
-
-      if (tagFilter) setFilterTag(tagFilter);
-      if (contactFilter) setFilterContact(contactFilter);
-
-      // Select first memory but don't load content yet
       if (filePath) {
         const mem = (memoriesData.memories || []).find((m: Memory) => m.path === filePath);
-        if (mem) {
-          setSelectedMemory(mem);
-        }
+        if (mem) setSelectedMemory(mem);
       } else if (memoriesData.memories?.length > 0) {
         setSelectedMemory(memoriesData.memories[0]);
       }
@@ -264,9 +213,9 @@ function MemoriesContent() {
     }
   }, [searchParams]);
 
-  // Load content for selected memory on demand
+  // Load content for selected memory
   const loadMemoryContent = useCallback(async (memory: Memory) => {
-    if (memory.content) return; // Already loaded
+    if (memory.content) return;
     
     setLoadingContent(true);
     try {
@@ -274,7 +223,6 @@ function MemoriesContent() {
       const data = await res.json();
       
       if (data.content !== undefined) {
-        // Update memory with content
         setMemories(prev => prev.map(m => 
           m.path === memory.path ? { ...m, content: data.content, attachments: data.attachments } : m
         ));
@@ -284,6 +232,18 @@ function MemoriesContent() {
         );
         setEditContent(data.content || '');
         setMemoryAttachments(data.attachments || []);
+        
+        // Extract tags from this content and update tag list
+        const { tags: memTags } = parseMentions(data.content || '');
+        setTags(prev => {
+          const tagMap = new Map(prev.map(t => [t.name, t.count]));
+          for (const tag of memTags) {
+            tagMap.set(tag, (tagMap.get(tag) || 0) + 1);
+          }
+          return Array.from(tagMap.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count);
+        });
       }
     } catch (error) {
       console.error('Failed to load memory content:', error);
@@ -296,34 +256,25 @@ function MemoriesContent() {
     fetchMemoryList();
   }, [fetchMemoryList]);
 
-  // Load content when memory is selected
   useEffect(() => {
     if (selectedMemory && !selectedMemory.content) {
       loadMemoryContent(selectedMemory);
-    } else if (selectedMemory) {
-      setEditContent(selectedMemory.content || '');
+    } else if (selectedMemory?.content) {
+      setEditContent(selectedMemory.content);
       setMemoryAttachments(selectedMemory.attachments || []);
     }
   }, [selectedMemory?.path]);
 
-  // Filter memories based on search and filters (only by name/path since no content in light mode)
+  // Extract action items when memory content changes
+  useEffect(() => {
+    if (selectedMemory?.content) {
+      setActionItems(extractActionItems(selectedMemory.content));
+    }
+  }, [selectedMemory?.content]);
+
+  // Filter memories
   const filteredMemories = memories.filter(mem => {
-    if (filterTag || filterContact) {
-      // For tag/contact filtering, we need content - skip filter in light mode
-      // Tags will be filtered client-side when content is loaded
-      return true;
-    }
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      if (!mem.name.toLowerCase().includes(q) && !mem.path.toLowerCase().includes(q)) {
-        // Also search in content if loaded
-        if (mem.content && !mem.content.toLowerCase().includes(q)) {
-          return false;
-        } else if (!mem.content) {
-          return true; // Include if content not loaded yet
-        }
-      }
-    }
+    // Date filter
     if (dateFilter !== 'all') {
       const memDate = new Date(mem.lastModified);
       const now = new Date();
@@ -332,135 +283,29 @@ function MemoriesContent() {
       if (dateFilter === 'week' && memDate < weekAgo) return false;
       if (dateFilter === 'month' && memDate < monthAgo) return false;
     }
+    
+    // Search query - search in name/path first, then in content if loaded
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const nameMatch = mem.name.toLowerCase().includes(q) || mem.path.toLowerCase().includes(q);
+      const contentMatch = mem.content?.toLowerCase().includes(q);
+      if (!nameMatch && !contentMatch) return false;
+    }
+    
+    // Tag filter - requires content
+    if (filterTag && mem.content) {
+      const { tags: memTags } = parseMentions(mem.content);
+      if (!memTags.includes(filterTag.toLowerCase())) return false;
+    }
+    
+    // Contact filter - requires content
+    if (filterContact && mem.content) {
+      const { contacts: memContacts } = parseMentions(mem.content);
+      if (!memContacts.some(c => c.toLowerCase() === filterContact.toLowerCase())) return false;
+    }
+    
     return true;
   });
-
-  // Extract action items when memory changes
-  useEffect(() => {
-    if (selectedMemory?.content) {
-      setActionItems(extractActionItems(selectedMemory.content));
-    }
-  }, [selectedMemory?.content]);
-
-  // Get tag suggestions when editing
-  useEffect(() => {
-    if (editing && editContent) {
-      const { tags: existingTags } = parseMentions(editContent);
-      const suggestions: string[] = [];
-      const lower = editContent.toLowerCase();
-
-      if (lower.includes('tender') || lower.includes('rfp')) suggestions.push('tender');
-      if (lower.includes('partner')) suggestions.push('partner');
-      if (lower.includes('deal') || lower.includes('contract')) suggestions.push('deal');
-      if (lower.includes('follow up') || lower.includes('follow-up')) suggestions.push('follow-up');
-      if (lower.includes('meeting') || lower.includes('call')) suggestions.push('meeting');
-      if (lower.includes('quote') || lower.includes('pricing')) suggestions.push('pricing');
-      if (lower.includes('lorawan')) suggestions.push('lorawan');
-      if (lower.includes('iot')) suggestions.push('iot');
-
-      setSuggestedTags(suggestions.filter(t => !existingTags.includes(t)));
-    }
-  }, [editing, editContent]);
-
-  // Handle @mention autocomplete
-  const handleTextareaChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    const pos = e.target.selectionStart;
-    setEditContent(value);
-    setCursorPosition(pos);
-
-    // Check if we're typing a mention
-    const beforeCursor = value.substring(0, pos);
-    const mentionMatch = beforeCursor.match(/@([A-Za-z]*)$/);
-
-    if (mentionMatch) {
-      setMentionQuery(mentionMatch[1]);
-      setShowMentionDropdown(true);
-      
-      if (textareaRef.current) {
-        const rect = textareaRef.current.getBoundingClientRect();
-        setMentionPosition({
-          top: rect.bottom + window.scrollY,
-          left: rect.left,
-        });
-      }
-    } else {
-      setShowMentionDropdown(false);
-    }
-
-    if (autosaveTimeoutRef.current) {
-      clearTimeout(autosaveTimeoutRef.current);
-    }
-    
-    autosaveTimeoutRef.current = setTimeout(() => {
-      if (editing && editContent.trim() && selectedMemory) {
-        performAutosave();
-      }
-    }, 2000);
-  };
-
-  // Autosave function
-  const performAutosave = async () => {
-    if (!selectedMemory || !editContent.trim() || saving) return;
-    
-    setIsSaving(true);
-    try {
-      await fetch('/api/memories', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          path: selectedMemory.path,
-          content: editContent,
-          type: selectedMemory.type,
-          attachments: memoryAttachments,
-        }),
-      });
-
-      setSelectedMemory({ ...selectedMemory, content: editContent, attachments: memoryAttachments });
-      setLastSaved(new Date());
-    } catch (error) {
-      console.error('Failed to autosave:', error);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  // Insert mention
-  const insertMention = (contact: Contact) => {
-    if (!textareaRef.current) return;
-
-    const beforeMention = editContent.substring(0, cursorPosition - mentionQuery.length - 1);
-    const afterCursor = editContent.substring(cursorPosition);
-    const mention = `@${contact.firstName}${contact.lastName ? ' ' + contact.lastName : ''}`;
-    
-    const newContent = beforeMention + mention + ' ' + afterCursor;
-    setEditContent(newContent);
-    setShowMentionDropdown(false);
-
-    setTimeout(() => {
-      if (textareaRef.current) {
-        const newPos = beforeMention.length + mention.length + 1;
-        textareaRef.current.focus();
-        textareaRef.current.setSelectionRange(newPos, newPos);
-      }
-    }, 0);
-  };
-
-  // Insert tag
-  const insertTag = (tag: string) => {
-    if (!textareaRef.current) return;
-
-    const newContent = editContent + ` #${tag} `;
-    setEditContent(newContent);
-    setSuggestedTags(prev => prev.filter(t => t !== tag));
-
-    setTimeout(() => {
-      if (textareaRef.current) {
-        textareaRef.current.focus();
-        textareaRef.current.setSelectionRange(newContent.length, newContent.length);
-      }
-    }, 0);
-  };
 
   const selectMemory = (mem: Memory) => {
     setSelectedMemory(mem);
@@ -486,8 +331,10 @@ function MemoriesContent() {
       });
 
       setSelectedMemory({ ...selectedMemory, content: editContent, attachments: memoryAttachments });
+      setMemories(prev => prev.map(m => 
+        m.path === selectedMemory.path ? { ...m, content: editContent } : m
+      ));
       setEditing(false);
-      fetchMemoryList();
     } catch (error) {
       console.error('Failed to save memory:', error);
     } finally {
@@ -500,35 +347,31 @@ function MemoriesContent() {
     const exists = memories.some(m => m.path === `memory/${today}.md`);
 
     if (exists) {
-      alert('Today\'s note already exists');
+      const existing = memories.find(m => m.path === `memory/${today}.md`);
+      if (existing) selectMemory(existing);
       return;
     }
 
     const template = `# ${today}
 
 ## Meetings
-<!-- Use @Name to mention contacts -->
 
 ## Notes
 <!-- Use #tags to organize -->
 
 ## Action Items
 - [ ] 
-
-## Links
 `;
-
-    const newMemory = {
-      path: `memory/${today}.md`,
-      content: template,
-      type: 'daily' as const,
-    };
 
     try {
       await fetch('/api/memories', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newMemory),
+        body: JSON.stringify({
+          path: `memory/${today}.md`,
+          content: template,
+          type: 'daily',
+        }),
       });
 
       fetchMemoryList();
@@ -538,14 +381,8 @@ function MemoriesContent() {
   };
 
   const deleteMemory = async () => {
-    if (!selectedMemory) return;
-
-    if (selectedMemory.type === 'long-term') {
-      alert('Cannot delete long-term memory');
-      return;
-    }
-
-    if (!confirm(`Delete memory "${selectedMemory.name}"? This cannot be undone.`)) return;
+    if (!selectedMemory || selectedMemory.type === 'long-term') return;
+    if (!confirm(`Delete "${selectedMemory.name}"?`)) return;
 
     try {
       await fetch('/api/memories', {
@@ -592,14 +429,13 @@ function MemoriesContent() {
 
     try {
       const reader = new FileReader();
-
       reader.onload = async (event) => {
         const result = event.target?.result;
         if (!result) return;
 
         const isBinary = !file.name.match(/\.(md|txt|json|csv|yaml|yml|js|ts|tsx|jsx|py|html|css|xml)$/i);
-
         let content: string;
+        
         if (isBinary) {
           content = (result as string).split(',')[1];
         } else {
@@ -621,14 +457,10 @@ function MemoriesContent() {
           if (res.ok) {
             await fetchMemoryList();
             await toggleAttachment(file.name);
-          } else {
-            alert('Failed to upload document');
           }
         } catch (error) {
           console.error('Upload error:', error);
-          alert('Failed to upload file');
         }
-
         setUploading(false);
       };
 
@@ -642,8 +474,16 @@ function MemoriesContent() {
       setUploading(false);
     }
 
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    
+    if (target.dataset.tag) {
+      setFilterTag(target.dataset.tag);
+    } else if (target.dataset.link) {
+      setSearchQuery(target.dataset.link);
     }
   };
 
@@ -653,64 +493,12 @@ function MemoriesContent() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // Filter contacts for mention dropdown
-  const filteredContacts = contacts.filter(c => {
-    if (!mentionQuery) return true;
-    const name = `${c.firstName} ${c.lastName}`.toLowerCase();
-    return name.includes(mentionQuery.toLowerCase());
-  });
-
-  // Handle rendered content clicks
-  const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = e.target as HTMLElement;
-    
-    if (target.dataset.tag) {
-      setFilterTag(target.dataset.tag);
-    } else if (target.dataset.contact) {
-      window.location.href = `/contacts?highlight=${target.dataset.contact}`;
-    } else if (target.dataset.link) {
-      setSearchQuery(target.dataset.link);
-    }
-  };
-
   if (loading) {
-    return <div className="text-zinc-400">Loading memories...</div>;
+    return <div className="text-zinc-400 p-4">Loading memories...</div>;
   }
 
   return (
     <div className="space-y-4 sm:space-y-6">
-      {/* Mention Autocomplete Dropdown */}
-      {showMentionDropdown && editing && (
-        <div
-          ref={mentionDropdownRef}
-          className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl max-h-48 overflow-auto w-64"
-          style={{ top: mentionPosition.top, left: mentionPosition.left }}
-        >
-          <div className="p-2 text-xs text-zinc-400 border-b border-zinc-700">
-            Select contact...
-          </div>
-          {filteredContacts.length === 0 ? (
-            <div className="p-3 text-zinc-500 text-sm">No contacts found</div>
-          ) : (
-            filteredContacts.slice(0, 5).map(contact => (
-              <button
-                key={contact.id}
-                onClick={() => insertMention(contact)}
-                className="w-full text-left px-3 py-2 hover:bg-zinc-700 flex items-center gap-2"
-              >
-                <div className="w-8 h-8 bg-zinc-600 rounded-full flex items-center justify-center text-sm">
-                  {contact.firstName[0]}{contact.lastName?.[0]}
-                </div>
-                <div>
-                  <div className="text-sm">{contact.firstName} {contact.lastName}</div>
-                  <div className="text-xs text-zinc-400">{contact.company || contact.emailPrimary}</div>
-                </div>
-              </button>
-            ))
-          )}
-        </div>
-      )}
-
       {/* Attach Document Modal */}
       {showAttachModal && selectedMemory && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
@@ -766,23 +554,38 @@ function MemoriesContent() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h2 className="text-2xl sm:text-3xl font-bold">Memories</h2>
         <div className="flex flex-wrap gap-2">
+          <button 
+            onClick={() => setShowTagSidebar(!showTagSidebar)} 
+            className="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg text-sm"
+          >
+            🏷️ Tags
+          </button>
+          <button 
+            onClick={() => setShowActionItems(!showActionItems)} 
+            className="bg-zinc-800 hover:bg-zinc-700 px-3 py-2 rounded-lg text-sm"
+          >
+            ✓ Actions ({actionItems.length})
+          </button>
           <button onClick={createDailyNote} className="bg-blue-600 hover:bg-blue-700 px-3 sm:px-4 py-2 rounded-lg font-medium transition text-sm">
             + Today
           </button>
         </div>
       </div>
 
-      {/* Search */}
-      <div className="flex gap-3">
+      {/* Search & Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
         <div className="flex-1 relative">
           <input
             type="text"
-            placeholder="Search memories..."
+            placeholder="Search memories... (text, @contact, #tag)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-zinc-100 pl-10"
           />
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">🔍</span>
+          {searchQuery && (
+            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">✕</button>
+          )}
         </div>
         <select
           value={dateFilter}
@@ -793,11 +596,71 @@ function MemoriesContent() {
           <option value="week">Last Week</option>
           <option value="month">Last Month</option>
         </select>
+        {(filterTag || filterContact) && (
+          <button
+            onClick={() => { setFilterTag(null); setFilterContact(null); }}
+            className="bg-red-600/20 text-red-400 px-3 py-2 rounded-lg text-sm flex items-center gap-2"
+          >
+            Clear: {filterTag ? `#${filterTag}` : `@${filterContact}`} ✕
+          </button>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+      {/* Action Items Panel */}
+      {showActionItems && actionItems.length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
+          <h3 className="font-semibold mb-3 flex items-center gap-2">
+            ✓ Action Items
+          </h3>
+          <div className="space-y-2">
+            {actionItems.map((item, i) => (
+              <div key={i} className="flex items-start gap-3 p-2 bg-zinc-800 rounded-lg">
+                <input type="checkbox" className="mt-1 rounded border-zinc-600" />
+                <div className="flex-1">
+                  <div className={`text-sm ${item.priority === 'high' ? 'text-red-400' : 'text-zinc-300'}`}>
+                    {item.text}
+                  </div>
+                  {item.dueDate && (
+                    <div className="text-xs text-zinc-500 mt-1">Due: {item.dueDate}</div>
+                  )}
+                </div>
+                {item.priority === 'high' && (
+                  <span className="text-xs bg-red-600/30 text-red-400 px-2 py-0.5 rounded">High</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 sm:gap-6">
+        {/* Tag Sidebar */}
+        {showTagSidebar && tags.length > 0 && (
+          <div className="lg:col-span-1 bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800">
+            <h3 className="font-semibold text-zinc-300 text-sm mb-3">🏷️ Tags</h3>
+            <div className="space-y-1 max-h-[40vh] overflow-auto">
+              {tags.slice(0, 30).map(tag => (
+                <button
+                  key={tag.name}
+                  onClick={() => setFilterTag(filterTag === tag.name ? null : tag.name)}
+                  className={`w-full text-left px-2 py-1.5 rounded-lg transition text-sm flex items-center justify-between ${
+                    filterTag === tag.name ? 'bg-purple-600 text-white' : 'hover:bg-zinc-800 text-zinc-300'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${TAG_COLORS[tag.name] || 'bg-zinc-600'}`}></span>
+                    #{tag.name}
+                  </span>
+                  <span className="text-xs text-zinc-500">{tag.count}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Memory List */}
         <div className={`
+          ${showTagSidebar && tags.length > 0 ? 'lg:col-span-2' : 'lg:col-span-2'}
           bg-zinc-900 rounded-lg p-3 sm:p-4 border border-zinc-800
           fixed inset-0 z-40 bg-zinc-950/95 lg:bg-transparent lg:static lg:z-auto
           ${showSidebar ? 'block' : 'hidden lg:block'}
@@ -813,26 +676,45 @@ function MemoriesContent() {
             <p className="text-zinc-500 text-sm">No memories found.</p>
           ) : (
             <div className="space-y-1 max-h-[60vh] lg:max-h-[70vh] overflow-auto">
-              {filteredMemories.map(mem => (
-                <button
-                  key={mem.path}
-                  onClick={() => selectMemory(mem)}
-                  className={`w-full text-left px-3 py-2 rounded-lg transition text-sm ${
-                    selectedMemory?.path === mem.path ? 'bg-blue-600 text-white' : 'hover:bg-zinc-800 text-zinc-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span>{mem.type === 'long-term' ? '🧠' : '📅'}</span>
-                    <span className="truncate flex-1">{mem.name}</span>
-                  </div>
-                </button>
-              ))}
+              {filteredMemories.map(mem => {
+                const { tags: memTags, contacts: memContacts } = parseMentions(mem.content || '');
+                const items = extractActionItems(mem.content || '');
+                
+                return (
+                  <button
+                    key={mem.path}
+                    onClick={() => selectMemory(mem)}
+                    className={`w-full text-left px-3 py-2 rounded-lg transition text-sm ${
+                      selectedMemory?.path === mem.path ? 'bg-blue-600 text-white' : 'hover:bg-zinc-800 text-zinc-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{mem.type === 'long-term' ? '🧠' : '📅'}</span>
+                      <span className="truncate flex-1">{mem.name}</span>
+                      {items.length > 0 && <span className="text-xs text-yellow-400">☐{items.length}</span>}
+                    </div>
+                    {(memTags.length > 0 || memContacts.length > 0) && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {memTags.slice(0, 3).map(t => (
+                          <span key={t} className={`text-xs px-1.5 rounded ${TAG_COLORS[t] || 'bg-zinc-700'} text-white`}>#{t}</span>
+                        ))}
+                        {memContacts.slice(0, 2).map(c => (
+                          <span key={c} className="text-xs bg-blue-900/50 text-blue-300 px-1.5 rounded">@{c.split(' ')[0]}</span>
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
 
         {/* Content Editor */}
-        <div className="lg:col-span-2 bg-zinc-900 rounded-lg p-3 sm:p-6 border border-zinc-800">
+        <div className={`
+          ${showTagSidebar && tags.length > 0 ? 'lg:col-span-2' : 'lg:col-span-3'}
+          bg-zinc-900 rounded-lg p-3 sm:p-6 border border-zinc-800
+        `}>
           {selectedMemory ? (
             <div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-3 sm:mb-4">
@@ -841,6 +723,10 @@ function MemoriesContent() {
                   <span className="text-zinc-400 text-xs hidden sm:block">
                     {new Date(selectedMemory.lastModified).toLocaleString()}
                   </span>
+
+                  <button onClick={() => setShowAttachModal(true)} className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-purple-400 text-sm flex items-center gap-1">
+                    📎 {memoryAttachments.length > 0 && <span className="bg-purple-600 text-white text-xs px-1.5 rounded-full">{memoryAttachments.length}</span>}
+                  </button>
 
                   {!editing ? (
                     <>
@@ -863,6 +749,23 @@ function MemoriesContent() {
                 </div>
               </div>
 
+              {/* Attachments display */}
+              {memoryAttachments.length > 0 && (
+                <div className="mb-4 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
+                  <div className="text-xs text-zinc-400 mb-2">Attached Documents:</div>
+                  <div className="flex flex-wrap gap-2">
+                    {memoryAttachments.map(path => {
+                      const doc = documents.find(d => d.path === path);
+                      return (
+                        <span key={path} className="bg-zinc-700 px-2 py-1 rounded text-sm text-zinc-300 flex items-center gap-1">
+                          📎 {doc?.name || path}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {loadingContent ? (
                 <div className="text-zinc-400 py-12 text-center">
                   <div className="animate-pulse">Loading content...</div>
@@ -872,16 +775,19 @@ function MemoriesContent() {
                   <textarea
                     ref={textareaRef}
                     value={editContent}
-                    onChange={handleTextareaChange}
-                    placeholder={`# ${selectedMemory.name}\n\nUse @Name to mention contacts\nUse #tags to organize\nUse [[Title]] for wiki links`}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    placeholder={`# ${selectedMemory.name}\n\nUse @Name to mention contacts\nUse #tags to organize\nUse [[Title]] for wiki links\nUse - [ ] for action items`}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 sm:p-4 text-zinc-300 font-mono text-sm min-h-[50vh] sm:min-h-[60vh]"
                   />
+                  <div className="absolute bottom-3 right-3 text-xs text-zinc-500">
+                    Type @ for contacts, # for tags, [[ for wiki links
+                  </div>
                 </div>
               ) : viewMode === 'preview' ? (
                 <div
                   onClick={handleContentClick}
                   className="whitespace-pre-wrap text-zinc-300 text-sm bg-zinc-950 p-3 sm:p-4 rounded-lg border border-zinc-800 overflow-auto max-h-[60vh] sm:max-h-[70vh]"
-                  dangerouslySetInnerHTML={{ __html: renderContent(selectedMemory.content || '', contacts, () => {}, () => {}) }}
+                  dangerouslySetInnerHTML={{ __html: renderContent(selectedMemory.content || '', contacts) }}
                 />
               ) : (
                 <pre className="whitespace-pre-wrap text-zinc-300 font-mono text-sm bg-zinc-950 p-3 sm:p-4 rounded-lg border border-zinc-800 overflow-auto max-h-[60vh] sm:max-h-[70vh]">
@@ -910,7 +816,7 @@ function MemoriesContent() {
 
 export default function MemoriesPage() {
   return (
-    <Suspense fallback={<div className="text-zinc-400">Loading memories...</div>}>
+    <Suspense fallback={<div className="text-zinc-400 p-4">Loading memories...</div>}>
       <MemoriesContent />
     </Suspense>
   );
