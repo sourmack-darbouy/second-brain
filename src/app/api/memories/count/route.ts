@@ -19,22 +19,30 @@ export async function GET() {
   }
 }
 
-// Clear all daily memories
+// Clear all daily memories (fast - just clear the list)
 export async function DELETE() {
   try {
+    // Get the list first for reporting
     const dailyList = await redis.get<string[]>('memories:daily:list') || [];
+    const count = dailyList.length;
     
-    for (const date of dailyList) {
-      await redis.del(`memories:daily:${date}`);
-      await redis.del(`memories:daily:${date}:meta`);
-      await redis.del(`memories:attachments:memory/${date}.md`);
-    }
-    
+    // Clear the list - this makes all daily memories "disappear"
     await redis.del('memories:daily:list');
+    
+    // Clear individual keys in background (fire and forget)
+    // These will be cleaned up eventually anyway
+    dailyList.forEach(async (date) => {
+      try {
+        await redis.del(`memories:daily:${date}`);
+        await redis.del(`memories:daily:${date}:meta`);
+        await redis.del(`memories:attachments:memory/${date}.md`);
+      } catch {}
+    });
     
     return NextResponse.json({ 
       success: true, 
-      deleted: dailyList.length 
+      deleted: count,
+      note: 'List cleared, individual keys being cleaned in background'
     });
   } catch (error) {
     return NextResponse.json({ error: String(error) }, { status: 500 });
