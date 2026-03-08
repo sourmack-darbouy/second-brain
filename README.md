@@ -59,3 +59,4 @@ This Second Brain is designed to work with Alfred, your AI assistant. Alfred can
 ---
 
 Built with ❤️ for personal knowledge management
+
