@@ -226,20 +226,19 @@ function MemoriesContent() {
       // Set memories WITHOUT content (light mode)
       setMemories(memoriesData.memories || []);
       
-      // Fetch other data in parallel
-      const [docsRes, contactsRes, tagsRes] = await Promise.all([
+      // Fetch other data (skip tags - too slow with 396 memories)
+      const [docsRes, contactsRes] = await Promise.all([
         fetch('/api/documents'),
         fetch('/api/contacts'),
-        fetch('/api/memories-enhanced?action=tags'),
       ]);
 
       const docsData = await docsRes.json();
       const contactsData = await contactsRes.json();
-      const tagsData = await tagsRes.json();
 
       setDocuments(docsData.documents || []);
       setContacts(contactsData.contacts || []);
-      setTags(tagsData.tags || []);
+      // Tags loaded lazily from content when needed
+      setTags([]);
 
       // Handle URL params
       const filePath = searchParams.get('file');
