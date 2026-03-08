@@ -148,6 +148,19 @@ const TAG_COLORS: Record<string, string> = {
   'atex': 'bg-red-700',
 };
 
+// Highlight search query in text
+function highlightQuery(text: string, query: string): string {
+  if (!query || !text) return text;
+  
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escaped})`, 'gi');
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(regex, '<mark class="bg-yellow-500 text-black px-0.5 rounded">$1</mark>');
+}
+
 function MemoriesContent() {
   const searchParams = useSearchParams();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -175,6 +188,12 @@ function MemoriesContent() {
   const [viewMode, setViewMode] = useState<'preview' | 'source'>('preview');
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [showActionItems, setShowActionItems] = useState(false);
+  
+  // Server-side search
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   
   // File upload
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -487,6 +506,51 @@ function MemoriesContent() {
     }
   };
 
+  // Server-side search function
+  const performSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setSearching(true);
+    setSearchError(null);
+    setShowSearchModal(true);
+    
+    try {
+      const params = new URLSearchParams();
+      params.set('q', searchQuery);
+      if (filterTag) params.set('tag', filterTag);
+      if (filterContact) params.set('contact', filterContact);
+      
+      const res = await fetch(`/api/memories/search?${params}`);
+      const data = await res.json();
+      
+      if (data.error) {
+        setSearchError(data.error);
+        setSearchResults([]);
+      } else {
+        setSearchResults(data.results || []);
+      }
+    } catch (error) {
+      setSearchError('Search failed');
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const handleSearchKeydown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      performSearch();
+    }
+  };
+
+  const selectSearchResult = async (result: any) => {
+    setShowSearchModal(false);
+    const mem = memories.find(m => m.path === `memory/${result.name}.md`);
+    if (mem) {
+      selectMemory(mem);
+    }
+  };
+
   const formatSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -499,6 +563,95 @@ function MemoriesContent() {
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Search Results Modal */}
+      {showSearchModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-start justify-center p-4 pt-20">
+          <div className="bg-zinc-900 rounded-lg w-full max-w-3xl max-h-[70vh] overflow-hidden border border-zinc-700 shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-zinc-700">
+              <div>
+                <h3 className="text-lg font-semibold">Search Results</h3>
+                {!searching && searchResults.length > 0 && (
+                  <p className="text-sm text-zinc-400">Found {searchResults.length} memories matching "{searchQuery}"</p>
+                )}
+              </div>
+              <button onClick={() => setShowSearchModal(false)} className="text-zinc-400 hover:text-white p-2">✕</button>
+            </div>
+            
+            <div className="overflow-auto max-h-[calc(70vh-80px)]">
+              {searching ? (
+                <div className="p-8 text-center text-zinc-400">
+                  <div className="animate-pulse">Searching all memories...</div>
+                </div>
+              ) : searchError ? (
+                <div className="p-8 text-center text-red-400">{searchError}</div>
+              ) : searchResults.length === 0 ? (
+                <div className="p-8 text-center text-zinc-400">
+                  No results found for "{searchQuery}"<br/>
+                  <span className="text-sm">Try different keywords or check spelling</span>
+                </div>
+              ) : (
+                <div className="divide-y divide-zinc-800">
+                  {searchResults.map((result, i) => (
+                    <button
+                      key={result.path}
+                      onClick={() => selectSearchResult(result)}
+                      className="w-full text-left p-4 hover:bg-zinc-800 transition"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-lg">📅</span>
+                            <span className="font-medium text-white">{result.name}</span>
+                            <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">
+                              Score: {result.score}
+                            </span>
+                          </div>
+                          
+                          {/* Snippet with highlighted match */}
+                          <p className="text-sm text-zinc-300 mb-2 line-clamp-2"
+                             dangerouslySetInnerHTML={{ 
+                               __html: highlightQuery(result.snippet, searchQuery) 
+                             }} />
+                          
+                          {/* Tags */}
+                          {result.tags?.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-1">
+                              {result.tags.map((t: string) => (
+                                <span key={t} className={`text-xs px-1.5 rounded ${TAG_COLORS[t] || 'bg-zinc-700'} text-white`}>
+                                  #{t}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Contacts */}
+                          {result.contacts?.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {result.contacts.map((c: string) => (
+                                <span key={c} className="text-xs bg-blue-900/50 text-blue-300 px-1.5 rounded">
+                                  @{c}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Match info */}
+                          {result.matches?.length > 0 && (
+                            <div className="text-xs text-zinc-500 mt-1">
+                              {result.matches.join(' • ')}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Attach Document Modal */}
       {showAttachModal && selectedMemory && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
@@ -574,18 +727,23 @@ function MemoriesContent() {
 
       {/* Search & Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
-        <div className="flex-1 relative">
+        <div className="flex-1 relative flex gap-2">
           <input
             type="text"
-            placeholder="Search memories... (text, @contact, #tag)"
+            placeholder="Search all memories... (company, contact, #tag, topic)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-zinc-100 pl-10"
+            onKeyDown={handleSearchKeydown}
+            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-2 text-zinc-100 pl-10"
           />
           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500">🔍</span>
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white">✕</button>
-          )}
+          <button 
+            onClick={performSearch}
+            disabled={!searchQuery.trim() || searching}
+            className="bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-700 disabled:text-zinc-500 px-4 py-2 rounded-lg text-sm font-medium transition"
+          >
+            {searching ? '...' : 'Search'}
+          </button>
         </div>
         <select
           value={dateFilter}
