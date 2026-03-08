@@ -111,14 +111,15 @@ export async function GET(request: Request) {
       let snippet = '';
       if (query && contentLower.includes(query)) {
         const idx = contentLower.indexOf(query);
-        const start = Math.max(0, idx - 50);
-        const end = Math.min(content.length, idx + query.length + 100);
+        const start = Math.max(0, idx - 80);
+        const end = Math.min(content.length, idx + query.length + 120);
         snippet = (start > 0 ? '...' : '') + 
                   content.substring(start, end).replace(/\n/g, ' ') + 
                   (end < content.length ? '...' : '');
       } else {
-        // First 150 chars
-        snippet = content.substring(0, 150).replace(/\n/g, ' ') + '...';
+        // First 200 chars of actual content (skip title)
+        const lines = content.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+        snippet = lines.slice(0, 3).join(' ').substring(0, 200) + '...';
       }
       
       results.push({
