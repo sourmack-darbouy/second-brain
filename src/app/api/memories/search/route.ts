@@ -17,29 +17,32 @@ export async function GET(request: Request) {
     return NextResponse.json({ results: [], count: 0, message: 'Enter a search query' });
   }
   
-  const results: {
-    path: string;
-    name: string;
-    type: string;
-    lastModified: string;
-    score: number;
-    matches: string[];
-    snippet: string;
-    tags: string[];
-    contacts: string[];
-  }[] = [];
-
   try {
     // Get all daily memory dates
     const dailyList = await redis.get<string[]>('memories:daily:list') || [];
     
-    // Search through each memory
-    for (const date of dailyList) {
-      // Date filter
-      if (dateFrom && date < dateFrom) continue;
-      if (dateTo && date > dateTo) continue;
-      
+    // Filter by date first
+    let datesToSearch = dailyList;
+    if (dateFrom || dateTo) {
+      datesToSearch = dailyList.filter(date => {
+        if (dateFrom && date < dateFrom) return false;
+        if (dateTo && date > dateTo) return false;
+        return true;
+      });
+    }
+    
+    // Fetch all content in parallel (much faster)
+    const contentPromises = datesToSearch.map(async (date) => {
       const content = await redis.get<string>(`memories:daily:${date}`);
+      return { date, content };
+    });
+    
+    const contents = await Promise.all(contentPromises);
+    
+    // Search through results
+    const results: any[] = [];
+    
+    for (const { date, content } of contents) {
       if (!content) continue;
       
       const contentLower = content.toLowerCase();
@@ -73,7 +76,7 @@ export async function GET(request: Request) {
           const count = (content.match(regex) || []).length;
           score += count;
           
-          matches.push(`Found ${count} time(s)`);
+          matches.push(`${count} match${count > 1 ? 'es' : ''}`);
         }
         
         // Check company/wiki links
