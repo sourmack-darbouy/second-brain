@@ -14,7 +14,7 @@ export function BottomNav() {
     { href: '/', label: 'Home', icon: '🏠' },
     { href: '/calendar', label: 'Calendar', icon: '📅' },
     { href: '/memories', label: 'Notes', icon: '📝' },
-    { href: '/tasks', label: 'Tasks', icon: '✅' },
+    { href: '/companies', label: 'Companies', icon: '🏢' },
     { href: '/contacts', label: 'Contacts', icon: '👥' },
   ];
   
