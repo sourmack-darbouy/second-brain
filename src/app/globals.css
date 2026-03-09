@@ -66,6 +66,110 @@ body {
   * {
     scrollbar-width: none;
   }
+  
+  /* Larger touch targets for list items */
+  .touch-target {
+    min-height: 48px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+  }
+  
+  /* Better button spacing */
+  .touch-button {
+    min-height: 48px;
+    min-width: 48px;
+    padding: 12px 16px;
+  }
+  
+  /* Prevent text selection on UI elements */
+  .no-select {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* Mobile-specific improvements */
+@media (max-width: 640px) {
+  /* Larger text for readability */
+  body {
+    font-size: 16px;
+  }
+  
+  /* Full-width inputs */
+  input, textarea, select {
+    font-size: 16px !important; /* Prevent iOS zoom */
+  }
+  
+  /* Better spacing for cards */
+  .mobile-card {
+    margin-left: -1rem;
+    margin-right: -1rem;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+  
+  /* Floating action button position */
+  .fab-position {
+    bottom: 5rem;
+    right: 1rem;
+  }
+  
+  /* Bottom sheet style for modals */
+  .mobile-modal {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-height: 85vh;
+    border-radius: 1rem 1rem 0 0;
+    transform: translateY(100%);
+    animation: slideUp 0.3s ease forwards;
+  }
+  
+  @keyframes slideUp {
+    to {
+      transform: translateY(0);
+    }
+  }
+  
+  /* Swipe indicator */
+  .swipe-indicator {
+    width: 2rem;
+    height: 0.25rem;
+    background: #3f3f46;
+    border-radius: 0.125rem;
+    margin: 0.5rem auto;
+  }
+}
+
+/* Pull to refresh indicator */
+.pull-refresh {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-60px);
+  transition: transform 0.2s ease;
+  background: linear-gradient(to bottom, #09090b, transparent);
+  z-index: 50;
+}
+
+.pull-refresh.visible {
+  transform: translateY(0);
+}
+
+/* Haptic feedback visual indicator */
+.haptic-press {
+  transition: transform 0.1s ease;
+}
+
+.haptic-press:active {
+  transform: scale(0.97);
 }
 
 /* Prevent zoom on input focus (iOS) */
