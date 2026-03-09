@@ -1,39 +1,41 @@
 'use client';
 
-import { useEffect, useState } from 'next/navigation';
-
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 interface DashboardStats {
   totalMemories: number;
   totalCompanies: number;
+  totalContacts: number;
   activeDays: number;
-  recentMemories: { date: string; title: string; tags: string[] }[];
   topTags: { name: string; count: number }[];
   topCompanies: { name: string; count: number }[];
   recentActivity: { date: string; count: number }[];
-  actionItems: { total: number; pending: number; high: number }[];
 }
 
+const TAG_COLORS: Record<string, string> = {
+  'tender': 'bg-orange-600',
+  'partner': 'bg-blue-600',
+  'hot-lead': 'bg-red-600',
+  'poc': 'bg-violet-600',
+  'mining': 'bg-stone-600',
+  'utilities': 'bg-emerald-600',
+  'lorawan': 'bg-cyan-600',
+  'tracking': 'bg-sky-600',
+};
+
 export default function DashboardPage() {
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats>({
     totalMemories: 0,
     totalCompanies: 0,
+    totalContacts: 0,
     activeDays: 0,
-    recentMemories: [],
     topTags: [],
     topCompanies: [],
     recentActivity: [],
-    actionItems: { total: 0, pending: 0, high: 0 },
   });
-  const [error, setError] = useState<string | null>(null);
-
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const [showSearch, setShowSearch] = useState(false);
-
-  const [showQuickAdd, setShowQuickAdd] = useState(false);
 
   useEffect(() => {
     fetchDashboard();
@@ -42,261 +44,126 @@ export default function DashboardPage() {
   const fetchDashboard = async () => {
     try {
       setLoading(true);
-      setError(null);
 
-      // Fetch stats in parallel
-      const [memoriesRes, companiesRes] contactsRes] = await Promise.all([
-        fetch('/api/memories').then(r => r.json()),
-        fetch('/api/companies').then(r => r.json()),
-        fetch('/api/contacts').then(r => r.json()),
+      const [memoriesRes, companiesRes, contactsRes] = await Promise.all([
+        fetch('/api/memories'),
+        fetch('/api/companies'),
+        fetch('/api/contacts'),
       ]);
 
       const memoriesData = await memoriesRes.json();
       const companiesData = await companiesRes.json();
       const contactsData = await contactsRes.json();
 
-      // Calculate stats
       const totalMemories = (memoriesData.memories || []).length;
-      
-      // Get recent memories (last 7 days)
+      const totalCompanies = (companiesData.companies || []).length;
+      const totalContacts = (contactsData.contacts || []).length;
+
+      // Calculate active days (last 7 days)
       const weekAgo = new Date();
       weekAgo.setDate(weekAgo.getDate() - 7);
-      const recentMemories = (memoriesData.memories || [])
-        .filter(m => m.lastModified >= weekAgo.toISOString().split('T')[0])
-        .slice(0, 5)
-        .map(m => ({
-          date: m.lastModified.split('T')[0],
-          title: m.name,
-          tags: extractTags(m.content || ''),
-        }));
+      const recentMemories = (memoriesData.memories || []).filter(
+        (m: any) => m.lastModified >= weekAgo.toISOString().split('T')[0]
+      );
+      const activeDays = new Set(recentMemories.map((m: any) => m.lastModified.split('T')[0])).size;
 
-      
-      // Get top tags
-      const tagCounts = new Map<string, number>();
-      const tagRegex = /#([a-zA-Z0-9_-]+)/g;
-      memoriesData.memories.forEach(mem => {
-        if (mem.content) {
-          let match;
-          while ((match = tagRegex.exec(mem.content)) !== null) {
-            const tag = match[1].toLowerCase();
-            tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-          }
-        }
-      });
-      
-      const topTags = Array.from(tagCounts.entries())
-        .map(([name, count]) => ({ name, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10);
-      
-      // Get top companies
-      const companyCounts = new Map<string, number>();
-      const companyRegex = /\[\[([^\]]+)\]\]/g;
-      memoriesData.memories.forEach(mem => {
-        if (mem.content) {
-          let match;
-          while ((match = companyRegex.exec(mem.content)) !== null) {
-            const company = match[1];
-            companyCounts.set(company, (companyCounts.get(company) || 0) + 1);
-          }
-        }
-      });
-      
-      const topCompanies = Array.from(companyCounts.entries())
-        .map(([name, count]) => ({ name, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10);
-
-      
-      // Get activity by date (last 14 days)
+      // Get recent activity (last 14 days)
       const twoWeeksAgo = new Date();
       twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
       const activityByDate = new Map<string, number>();
-      memoriesData.memories.forEach(mem => {
-        const date = mem.lastModified.split('T')[0];
-        activityByDate.set(date, (activityByDate.get(date) || 0) + 1);
-      });
-      
-      const recentActivity = Array.from(activityByDate.entries())
-        .map(([date, count]) => ({ date, count }))
-        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-        .slice(0, 7);
-      
-      // Extract action items
-      const actionRegex = /[-*]?\s*\[\s*\]\s*(.+)/g;
-      const allActions: { text: string; memory: string }[] = [];
-      
-      memoriesData.memories.forEach(mem => {
-        if (mem.content) {
-          let match;
-          while ((match = actionRegex.exec(mem.content)) !== null) {
-            allActions.push({
-              text: match[1].trim(),
-              memory: mem.name,
-              date: mem.lastModified.split('T')[0],
-            });
-          }
+      (memoriesData.memories || []).forEach((m: any) => {
+        const date = m.lastModified?.split('T')[0];
+        if (date && date >= twoWeeksAgo.toISOString().split('T')[0]) {
+          activityByDate.set(date, (activityByDate.get(date) || 0) + 1);
         }
       });
-      
-      // Sort by priority
-      allActions.sort((a, b) => {
-        if (a.text.toLowerCase().includes('urgent') || a.text.includes('!!!')) return 2;
-        if (a.text.toLowerCase().includes('important') || a.text.includes('follow')) return 1;
-        return 0;
-      });
-      
-      const pendingActions = allActions.filter(a => a.priority === 0).length;
-      const highActions = allActions.filter(a => a.priority === 2).length;
+      const recentActivity = Array.from(activityByDate.entries())
+        .map(([date, count]) => ({ date, count }))
+        .sort((a, b) => b.date.localeCompare(a.date))
+        .slice(0, 7);
+
+      // Top tags from companies data
+      const topTags = (companiesData.stats?.topTags || []).slice(0, 10);
+
+      // Top companies
+      const topCompanies = (companiesData.companies || [])
+        .slice(0, 10)
+        .map((c: any) => ({ name: c.name, count: c.meetingCount }));
 
       setStats({
         totalMemories,
-        totalCompanies: companiesData.totalCompanies || 0,
-        activeDays: recentMemories.length,
-        recentMemories,
-        topTags
- topTags.slice(0, 10),
-        topCompanies: topCompanies.slice(0, 10),
-        recentActivity
-        actionItems: {
-          total: allActions.length,
-          pending: pendingActions.length,
-          high: highActions.length,
-        },
+        totalCompanies,
+        totalContacts,
+        activeDays,
+        topTags,
+        topCompanies,
+        recentActivity,
       });
-
+    } catch (error) {
+      console.error('Failed to fetch dashboard:', error);
+    } finally {
       setLoading(false);
-    } catch (err) {
-      console.error('Failed to fetch dashboard:', err);
-      setError('Failed to load dashboard')
-      setLoading(false)
     }
-  }
+  };
 
-  const extractTags = (content: string): string[] => {
-    const tags: string[] = []
-    const regex = /#([a-zA-Z0-9_-]+)/g
-    let match
-    while ((match = regex.exec(content)) !== null) {
-      tags.push(match[1].toLowerCase())
-    }
-    return [...new Set(tags)]
-  }
-
-  
-  const extractCompanies = (content: string): string[] => {
-    const companies: string[] = []
-    const regex = /\[\[([^\]]+)\]\]/g
-    let match
-    while ((match = regex.exec(content)) !== null) {
-      companies.push(match[1])
-    }
-    return [...new Set(companies)]
-  }
-
-  
-  const handleQuickAdd = async (data: { type: string; content: string }) => {
-    try {
-      const res = await fetch('/api/quick', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      })
-      
-      if (res.ok) {
-        fetchDashboard()
-        setShowQuickAdd(false)
-      }
-    } catch (err) {
-      console.error('Quick add failed:', err)
-    }
-  }
-  
   const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr)
-    const now = new Date()
-    const diffMs = date.getTime() - now.getTime()
-    const diffMins = Math.round(diffMs / 60000)
-    
-    if (diffMins < 0) return 'Just now'
-    if (diffMins < 60) return `${diffMins}m ago`
-    if (diffMins < 24 * 60) return `${Math.round(diffMins / 60)}h ago`
-    
-    const days = Math.floor(diffMins / 1440)
-    return `${days}+ days ago`
-    
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  };
 
-  
-  const openMemory = (date: string) => {
-    router.push(`/memories?file=${encodeURIComponent(`memory/${date}.md`)}`)
-  }
-  
-  const openCompany = (company: string) => {
-    router.push(`/companies?search=${encodeURIComponent(company)}`)
-  }
-  
   if (loading) {
     return (
       <div className="p-6">
         <div className="text-zinc-400">Loading dashboard...</div>
       </div>
-    )
+    );
   }
-  
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="bg-red-900/50 border border-red-800 rounded-lg p-4">
-          <p className="text-red-400">{error}</p>
-        </div>
-      </div>
-    )
-  }
-  
+
   return (
     <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-zinc-400 mt-1">Your Second Brain at a glance</p>
+        </div>
+      </div>
+
       {/* Quick Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div 
-          onClick={() => router.push('/memories')} 
-          className="bg-zinc-900 rounded-lg p-4 border border-zinc-800 hover:border-zinc-700 transition cursor-pointer"
+        <button
+          onClick={() => router.push('/memories')}
+          className="bg-zinc-900 rounded-lg p-4 border border-zinc-800 hover:border-zinc-700 transition text-left"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="text-3xl font-bold text-blue-400">{stats.totalMemories}</div>
             <span className="text-2xl">📝</span>
           </div>
           <div className="text-sm text-zinc-400">Memories</div>
-        </div>
-        
-        <div 
-          onClick={() => router.push('/companies')} 
-          className="bg-zinc-900 rounded-lg p-4 border border-zinc-800 hover:border-zinc-700 transition cursor-pointer"
+        </button>
+
+        <button
+          onClick={() => router.push('/companies')}
+          className="bg-zinc-900 rounded-lg p-4 border border-zinc-800 hover:border-zinc-700 transition text-left"
         >
           <div className="flex items-center justify-between mb-2">
             <div className="text-3xl font-bold text-green-400">{stats.totalCompanies}</div>
             <span className="text-2xl">🏢</span>
           </div>
           <div className="text-sm text-zinc-400">Companies</div>
-        </div>
-        
-        <div 
-          onClick={() => router.push('/contacts')} 
-          className="bg-zinc-900 rounded-lg p-4 border border-zinc-800 hover:border-zinc-700 transition cursor-pointer"
+        </button>
+
+        <button
+          onClick={() => router.push('/contacts')}
+          className="bg-zinc-900 rounded-lg p-4 border border-zinc-800 hover:border-zinc-700 transition text-left"
         >
           <div className="flex items-center justify-between mb-2">
-            <div className="text-3xl font-bold text-purple-400">{contacts.length}</div>
+            <div className="text-3xl font-bold text-purple-400">{stats.totalContacts}</div>
             <span className="text-2xl">👥</span>
           </div>
           <div className="text-sm text-zinc-400">Contacts</div>
-        </div>
-        
+        </button>
+
         <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
           <div className="flex items-center justify-between mb-2">
             <div className="text-3xl font-bold text-amber-400">{stats.activeDays}</div>
@@ -304,71 +171,99 @@ export default function DashboardPage() {
           </div>
           <div className="text-sm text-zinc-400">Active Days (7d)</div>
         </div>
-        
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Activity */}
         <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
-          <div className="flex items-center justify-between mb-2">
-            <div className="text-3xl font-bold text-red-400">{stats.actionItems.high}</div>
-            <span className="text-2xl">⚡</span>
+          <h3 className="font-semibold mb-4">Recent Activity</h3>
+          {stats.recentActivity.length === 0 ? (
+            <p className="text-zinc-500 text-sm">No recent activity</p>
+          ) : (
+            <div className="space-y-2">
+              {stats.recentActivity.map((activity) => (
+                <div key={activity.date} className="flex items-center justify-between py-2 border-b border-zinc-800 last:border-0">
+                  <span className="text-zinc-300">{formatDate(activity.date)}</span>
+                  <span className="bg-blue-600/20 text-blue-400 px-2 py-0.5 rounded-full text-sm">
+                    {activity.count} {activity.count === 1 ? 'memory' : 'memories'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Top Tags */}
+        <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
+          <h3 className="font-semibold mb-4">Top Tags</h3>
+          {stats.topTags.length === 0 ? (
+            <p className="text-zinc-500 text-sm">No tags found</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {stats.topTags.map((tag) => (
+                <button
+                  key={tag.name}
+                  onClick={() => router.push(`/memories?tag=${tag.name}`)}
+                  className={`text-sm px-3 py-1 rounded ${TAG_COLORS[tag.name] || 'bg-zinc-700'} text-white hover:opacity-80`}
+                >
+                  #{tag.name} ({tag.count})
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Top Companies */}
+        <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-800 lg:col-span-2">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-semibold">Top Companies</h3>
+            <button
+              onClick={() => router.push('/companies')}
+              className="text-sm text-blue-400 hover:text-blue-300"
+            >
+              View all →
+            </button>
           </div>
-          <div className="text-sm text-zinc-400">High Priority Actions</div>
+          {stats.topCompanies.length === 0 ? (
+            <p className="text-zinc-500 text-sm">No companies found</p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              {stats.topCompanies.map((company) => (
+                <button
+                  key={company.name}
+                  onClick={() => router.push(`/companies?search=${encodeURIComponent(company.name)}`)}
+                  className="bg-zinc-800 hover:bg-zinc-700 rounded-lg p-3 text-left transition"
+                >
+                  <div className="font-medium truncate">{company.name}</div>
+                  <div className="text-xs text-zinc-400 mt-1">{company.count} meetings</div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Recent Activity */}
-      <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
-        <h3 className="font-semibold text-zinc-300 mb-3">Recent Activity</h3>
-        <div className="space-y-2">
-          {stats.recentActivity.slice(0, 5).map(activity => (
-            <div key={activity.date} className="flex items-center justify-between text-sm">
-              <span className="text-zinc-400">{formatDate(activity.date)}</span>
-              <span className="bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full">
-                {activity.count}
-              </span>
-            </div>
-          ))}
-        </div>
+      {/* Quick Actions */}
+      <div className="flex flex-wrap gap-3">
+        <button
+          onClick={() => router.push('/memories')}
+          className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg text-sm"
+        >
+          📝 New Memory
+        </button>
+        <button
+          onClick={() => router.push('/companies')}
+          className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm"
+        >
+          🏢 View Companies
+        </button>
+        <button
+          onClick={() => router.push('/memories/calendar')}
+          className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm"
+        >
+          📅 Memory Calendar
+        </button>
       </div>
-
-      {/* Quick Add */}
-      <button
-        onClick={() => setShowQuickAdd(true)}
-        className="fixed bottom-20 right-4 bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-full shadow-lg flex items-center justify-center text-xl z-40 sm:hidden"
-      >
-        ⚡
-      </button>
-
-      {/* Quick Add Modal */}
-      {showQuickAdd && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 rounded-lg p-6 max-w-md w-full border border-zinc-700">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Quick Add</h3>
-              <button onClick={() => setShowQuickAdd(false)} className="text-zinc-400 hover:text-white text-xl">✕</button>
-            </div>
-            
-            <div className="space-y-4">
-              <button
-                onClick={() => { setShowQuickAdd(false); router.push('/memories?new=true'); }}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg"
-              >
-                📝 New Memory
-              </button>
-              <button
-                onClick={() => { setShowQuickAdd(false); router.push('/contacts?action=new'); }}
-                className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg"
-              >
-                👤 New Contact
-              </button>
-              <button
-                onClick={() => { setShowQuickAdd(false); router.push('/tasks?action=new'); }}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-lg"
-              >
-                ✅ New Task
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
-  )
+  );
 }

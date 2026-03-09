@@ -3,44 +3,44 @@ import { Redis } from '@upstash/redis';
 
 const redis = Redis.fromEnv();
 
-// Export all memories as a single markdown file
+// Export all memories as markdown
 export async function GET() {
   try {
-    // Get long-term memory
+    // Get all daily memories
+    const dailyList = await redis.get<string[]>('memories:daily:list') || [];
     const longTerm = await redis.get<string>('memories:longterm');
     
-    // Get daily memories list
-    const dailyList = await redis.get<string[]>('memories:daily:list') || [];
-    
-    // Build export content
-    let exportContent = `# Second Brain Export\n\n`;
+    // Build markdown export
+    let exportContent = '# Second Brain Export\n\n';
     exportContent += `Exported: ${new Date().toISOString()}\n\n`;
     exportContent += `---\n\n`;
     
     // Add long-term memory
     if (longTerm) {
-      exportContent += `# Long-term Memory\n\n`;
+      exportContent += '## Long-term Memory\n\n';
       exportContent += longTerm;
-      exportContent += `\n\n---\n\n`;
+      exportContent += '\n\n---\n\n';
     }
     
     // Add daily memories (sorted by date, newest first)
-    exportContent += `# Daily Memories\n\n`;
+    exportContent += '## Daily Memories\n\n';
     
     const sortedDays = dailyList.sort().reverse();
     
     for (const date of sortedDays) {
       const content = await redis.get<string>(`memories:daily:${date}`);
       if (content) {
+        exportContent += `### ${date}\n\n`;
         exportContent += content;
-        exportContent += `\n\n---\n\n`;
+        exportContent += '\n\n---\n\n';
       }
     }
     
-    return new Response(exportContent, {
+    // Return as downloadable file
+    return new NextResponse(exportContent, {
       headers: {
         'Content-Type': 'text/markdown',
-        'Content-Disposition': `attachment; filename="second-brain-memories-${new Date().toISOString().split('T')[0]}.md"`,
+        'Content-Disposition': `attachment; filename="second-brain-export-${new Date().toISOString().split('T')[0]}.md"`,
       },
     });
   } catch (error) {
