@@ -194,6 +194,8 @@ function MemoriesContent() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [lastSearchQuery, setLastSearchQuery] = useState<string>('');
+  const [cameFromSearch, setCameFromSearch] = useState(false);
   
   // File upload
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -520,6 +522,8 @@ function MemoriesContent() {
   // Server-side search function
   const performSearch = async () => {
     if (!searchQuery.trim()) return;
+    setLastSearchQuery(searchQuery);
+    setCameFromSearch(false);
     await performSearchWithQuery(searchQuery);
   };
 
@@ -527,6 +531,7 @@ function MemoriesContent() {
   const performSearchWithQuery = async (query: string) => {
     if (!query.trim()) return;
     
+    setLastSearchQuery(query);
     setSearching(true);
     setSearchError(null);
     setShowSearchModal(true);
@@ -562,10 +567,16 @@ function MemoriesContent() {
 
   const selectSearchResult = async (result: any) => {
     setShowSearchModal(false);
+    setCameFromSearch(true);
     const mem = memories.find(m => m.path === `memory/${result.name}.md`);
     if (mem) {
       selectMemory(mem);
     }
+  };
+  
+  const backToSearchResults = () => {
+    setShowSearchModal(true);
+    setCameFromSearch(false);
   };
 
   const formatSize = (bytes: number) => {
@@ -893,7 +904,17 @@ function MemoriesContent() {
           {selectedMemory ? (
             <div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-3 sm:mb-4">
-                <h3 className="text-lg sm:text-xl font-semibold">{selectedMemory.name}</h3>
+                <div className="flex items-center gap-3">
+                  {cameFromSearch && (
+                    <button 
+                      onClick={backToSearchResults} 
+                      className="bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg text-white text-sm flex items-center gap-1"
+                    >
+                      ← Back to results
+                    </button>
+                  )}
+                  <h3 className="text-lg sm:text-xl font-semibold">{selectedMemory.name}</h3>
+                </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-zinc-400 text-xs hidden sm:block">
                     {new Date(selectedMemory.lastModified).toLocaleString()}
