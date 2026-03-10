@@ -100,14 +100,15 @@ export async function GET() {
       .sort((a, b) => b.meetingCount - a.meetingCount);
     
     // Calculate stats
+    const recentCompaniesList = companies
+      .filter(c => c.lastContact >= getDateDaysAgo(30))
+      .sort((a, b) => b.lastContact.localeCompare(a.lastContact));
+    
     const stats = {
       totalCompanies: companies.length,
       totalMeetings: companies.reduce((sum, c) => sum + c.meetingCount, 0),
+      recentCompanies: recentCompaniesList.length,
       topTags: getTopTags(companies),
-      recentCompanies: companies
-        .filter(c => c.lastContact >= getDateDaysAgo(30))
-        .sort((a, b) => b.lastContact.localeCompare(a.lastContact))
-        .slice(0, 10),
     };
     
     return NextResponse.json({ companies, stats });
