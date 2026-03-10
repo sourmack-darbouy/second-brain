@@ -60,11 +60,29 @@ export default function CompaniesPage() {
     try {
       setLoading(true);
       const res = await fetch('/api/companies');
+      
+      if (!res.ok) {
+        throw new Error(`Failed to load companies: ${res.status}`);
+      }
+      
       const data = await res.json();
       setCompanies(data.companies || []);
-      setStats(data.stats || null);
+      setStats(data.stats || {
+        totalCompanies: 0,
+        totalMeetings: 0,
+        recentCompanies: 0,
+        topTags: [],
+      });
     } catch (error) {
       console.error('Failed to fetch companies:', error);
+      // Set empty state instead of crashing
+      setCompanies([]);
+      setStats({
+        totalCompanies: 0,
+        totalMeetings: 0,
+        recentCompanies: 0,
+        topTags: [],
+      });
     } finally {
       setLoading(false);
     }
