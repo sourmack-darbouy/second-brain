@@ -219,11 +219,22 @@ function MemoriesContent() {
       setContacts(contactsData.contacts || []);
 
       const filePath = searchParams.get('file');
+      const searchQuery = searchParams.get('search');
+      
       if (filePath) {
         const mem = (memoriesData.memories || []).find((m: Memory) => m.path === filePath);
         if (mem) setSelectedMemory(mem);
       } else if (memoriesData.memories?.length > 0) {
         setSelectedMemory(memoriesData.memories[0]);
+      }
+      
+      // If coming from Companies page with search query, trigger search
+      if (searchQuery && searchQuery.trim()) {
+        setSearchQuery(searchQuery);
+        // Auto-trigger server-side search
+        setTimeout(() => {
+          performSearchWithQuery(searchQuery);
+        }, 100);
       }
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -509,6 +520,12 @@ function MemoriesContent() {
   // Server-side search function
   const performSearch = async () => {
     if (!searchQuery.trim()) return;
+    await performSearchWithQuery(searchQuery);
+  };
+
+  // Search with specific query (for URL parameter)
+  const performSearchWithQuery = async (query: string) => {
+    if (!query.trim()) return;
     
     setSearching(true);
     setSearchError(null);
@@ -516,7 +533,7 @@ function MemoriesContent() {
     
     try {
       const params = new URLSearchParams();
-      params.set('q', searchQuery);
+      params.set('q', query);
       if (filterTag) params.set('tag', filterTag);
       if (filterContact) params.set('contact', filterContact);
       
