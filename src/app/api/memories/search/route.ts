@@ -143,7 +143,7 @@ export async function GET(request: Request) {
       // Primary: date (most recent first)
       const dateCompare = b.name.localeCompare(a.name);
       if (dateCompare !== 0) return dateCompare;
-      // Secondary: score (relevance)
+      // Secondary: score (higher first)
       return b.score - a.score;
     });
     
