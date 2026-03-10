@@ -138,8 +138,14 @@ export async function GET(request: Request) {
       });
     }
     
-    // Sort by score (relevance)
-    results.sort((a, b) => b.score - a.score);
+    // Sort by date (most recent first), then by score
+    results.sort((a, b) => {
+      // Primary: date (most recent first)
+      const dateCompare = b.name.localeCompare(a.name);
+      if (dateCompare !== 0) return dateCompare;
+      // Secondary: score (relevance)
+      return b.score - a.score;
+    });
     
     // Limit results
     const limited = results.slice(0, limit);
