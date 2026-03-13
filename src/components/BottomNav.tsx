@@ -23,7 +23,7 @@ export function BottomNav() {
   
   // Close more menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: Event) => {
       if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
         setShowMore(false);
       }
