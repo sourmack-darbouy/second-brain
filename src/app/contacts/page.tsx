@@ -733,7 +733,69 @@ function ContactsContent() {
     a.click();
   };
 
-  const filteredContacts = contacts.filter(c => {
+  // Generate vCard for download
+  const generateVCard = (contact: Contact): string => {
+    const lines = [
+      'BEGIN:VCARD',
+      'VERSION:3.0',
+      `FN:${contact.firstName} ${contact.lastName}`,
+      `N:${contact.lastName};${contact.firstName};;;`,
+    ];
+    
+    if (contact.emailPrimary) {
+      lines.push(`EMAIL;TYPE=INTERNET,WORK:${contact.emailPrimary}`);
+    }
+    if (contact.emailSecondary) {
+      lines.push(`EMAIL;TYPE=INTERNET,HOME:${contact.emailSecondary}`);
+    }
+    if (contact.phoneMobile) {
+      lines.push(`TEL;TYPE=CELL:${contact.phoneMobile}`);
+    }
+    if (contact.phoneWork) {
+      lines.push(`TEL;TYPE=WORK:${contact.phoneWork}`);
+    }
+    if (contact.company) {
+      lines.push(`ORG:${contact.company}`);
+    }
+    if (contact.jobTitle) {
+      lines.push(`TITLE:${contact.jobTitle}`);
+    }
+    if (contact.linkedInUrl) {
+      lines.push(`URL;TYPE=LINKEDIN:${contact.linkedInUrl}`);
+    }
+    if (contact.companyWebsite) {
+      lines.push(`URL;TYPE=WORK:${contact.companyWebsite}`);
+    }
+    if (contact.city || contact.country) {
+      lines.push(`ADR;TYPE=WORK:;;${contact.city || ''};${contact.country || ''};;;`);
+    }
+    
+    lines.push('END:VCARD');
+    return lines.join('\n');
+  };
+
+  // Download contact as vCard
+  const downloadVCard = (contact: Contact) => {
+    const vcard = generateVCard(contact);
+    const blob = new Blob([vcard], { type: 'text/vcard;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${contact.firstName}_${contact.lastName}.vcf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Sort contacts alphabetically by name
+  const sortedContacts = [...contacts].sort((a, b) => {
+    const nameA = `${a.firstName} ${a.lastName}`.toLowerCase();
+    const nameB = `${b.firstName} ${b.lastName}`.toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+
+  const filteredContacts = sortedContacts.filter(c => {
     if (c.status === 'duplicate' && !showDuplicates) return false;
     if (filterTag && !c.tags.includes(filterTag)) return false;
     if (searchQuery) {
@@ -1581,6 +1643,50 @@ function ContactsContent() {
                 <p>{contact.company}</p>
                 <p className="truncate">{contact.emailPrimary}</p>
               </div>
+              
+              {/* Quick Actions */}
+              <div className="mt-3 flex gap-2">
+                {contact.phoneMobile && (
+                  <a
+                    href={`tel:${contact.phoneMobile}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 px-2 py-1 bg-green-600/20 text-green-400 rounded text-xs hover:bg-green-600/30 transition"
+                    title="Call"
+                  >
+                    📞 Call
+                  </a>
+                )}
+                {contact.emailPrimary && (
+                  <a
+                    href={`mailto:${contact.emailPrimary}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 px-2 py-1 bg-blue-600/20 text-blue-400 rounded text-xs hover:bg-blue-600/30 transition"
+                    title="Email"
+                  >
+                    ✉️ Email
+                  </a>
+                )}
+                {contact.linkedInUrl && (
+                  <a
+                    href={contact.linkedInUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 px-2 py-1 bg-sky-600/20 text-sky-400 rounded text-xs hover:bg-sky-600/30 transition"
+                    title="LinkedIn"
+                  >
+                    🔗 LinkedIn
+                  </a>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); downloadVCard(contact); }}
+                  className="flex items-center gap-1 px-2 py-1 bg-purple-600/20 text-purple-400 rounded text-xs hover:bg-purple-600/30 transition"
+                  title="Download to phone"
+                >
+                  📥 Save
+                </button>
+              </div>
+              
               {contact.tags.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1">
                   {contact.tags.slice(0, 3).map(tag => (
