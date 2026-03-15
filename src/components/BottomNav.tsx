@@ -24,11 +24,16 @@ export function BottomNav() {
   // Close more menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (e: Event) => {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) {
+      const target = e.target as HTMLElement;
+      // Don't close if clicking the More button itself
+      if (target.closest('[data-more-button]')) {
+        return;
+      }
+      if (moreRef.current && !moreRef.current.contains(target)) {
         setShowMore(false);
       }
     };
-    document.addEventListener('touchstart', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside, { passive: true });
     document.addEventListener('click', handleClickOutside);
     return () => {
       document.removeEventListener('touchstart', handleClickOutside);
@@ -140,6 +145,7 @@ export function BottomNav() {
           
           {/* More Button */}
           <button
+            data-more-button
             onClick={() => { haptic('medium'); setShowMore(!showMore); }}
             className={`flex flex-col items-center justify-center flex-1 h-full transition-all active:scale-95 ${
               showMore || isSecondaryActive
