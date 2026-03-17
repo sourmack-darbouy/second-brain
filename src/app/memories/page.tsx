@@ -97,6 +97,14 @@ function renderContent(content: string, contacts: Contact[]): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 
+  // Convert markdown images FIRST (before other processing)
+  // Format: ![alt text](/api/memories/images?id=xxx)
+  rendered = rendered.replace(
+    /!\[([^\]]*)\]\((\/api\/memories\/images\?id=[^)]+)\)/g,
+    (match, alt, url) =>
+      `<img src="${url}" alt="${alt}" class="max-w-full h-auto rounded-lg border border-zinc-700 my-2 cursor-pointer hover:opacity-90 transition" style="max-height: 400px;" onclick="window.open('${url}', '_blank')" />`
+  );
+
   // Convert @Mentions
   rendered = rendered.replace(
     /@([A-Z][a-zA-Z]+\s?[A-Z]?[a-zA-Z]*)/g,
@@ -199,7 +207,10 @@ function MemoriesContent() {
   
   // File upload
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [memoryImages, setMemoryImages] = useState<{id: string; data: string; filename: string}[]>([]);
 
   // Fetch memory list (lightweight)
   const fetchMemoryList = useCallback(async () => {
@@ -507,6 +518,94 @@ function MemoriesContent() {
     }
 
     if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Handle image upload and embed in memory
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedMemory) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image too large. Maximum size is 5MB');
+      return;
+    }
+
+    setUploadingImage(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const imageData = event.target?.result as string;
+        
+        try {
+          // Upload image to storage
+          const res = await fetch('/api/memories/images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageData,
+              memoryPath: selectedMemory.path,
+              filename: file.name,
+            }),
+          });
+
+          const data = await res.json();
+          
+          if (data.success) {
+            // Insert markdown image syntax at cursor position
+            const imageMarkdown = `\n${data.markdown}\n`;
+            const newContent = editContent + imageMarkdown;
+            setEditContent(newContent);
+            
+            // Add to memory images list
+            setMemoryImages(prev => [...prev, { id: data.imageId, data: imageData, filename: file.name }]);
+          }
+        } catch (error) {
+          console.error('Image upload error:', error);
+          alert('Failed to upload image');
+        }
+        setUploadingImage(false);
+      };
+
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Image read error:', error);
+      setUploadingImage(false);
+    }
+
+    if (imageInputRef.current) imageInputRef.current.value = '';
+  };
+
+  // Load images when memory is selected
+  const loadMemoryImages = async (memoryPath: string) => {
+    try {
+      // Extract image IDs from content
+      const imageRegex = /!\[.*?\]\(\/api\/memories\/images\?id=([a-zA-Z0-9-]+)\)/g;
+      const images: { id: string; data: string; filename: string }[] = [];
+      
+      // Fetch each image
+      let match;
+      const content = selectedMemory?.content || '';
+      while ((match = imageRegex.exec(content)) !== null) {
+        const imageId = match[1];
+        const res = await fetch(`/api/memories/images?id=${imageId}`);
+        const data = await res.json();
+        if (data.data) {
+          images.push({ id: imageId, data: data.data, filename: 'image' });
+        }
+      }
+      
+      setMemoryImages(images);
+    } catch (error) {
+      console.error('Failed to load images:', error);
+    }
   };
 
   const handleContentClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -967,15 +1066,104 @@ function MemoriesContent() {
                   <div className="animate-pulse">Loading content...</div>
                 </div>
               ) : editing ? (
-                <div className="relative">
+                <div className="space-y-3">
+                  {/* Image upload button */}
+                  <div className="flex gap-2">
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => imageInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-green-400 text-sm flex items-center gap-1 disabled:opacity-50"
+                    >
+                      {uploadingImage ? '⏳ Uploading...' : '📷 Add Image'}
+                    </button>
+                    <span className="text-xs text-zinc-500 flex items-center">
+                      PNG, JPG, GIF up to 5MB
+                    </span>
+                  </div>
+                  
+                  {/* Image previews */}
+                  {memoryImages.length > 0 && (
+                    <div className="flex flex-wrap gap-2 p-3 bg-zinc-800/50 rounded-lg border border-zinc-700">
+                      <div className="text-xs text-zinc-400 w-full mb-2">Images in this memory:</div>
+                      {memoryImages.map((img, i) => (
+                        <div key={img.id || i} className="relative group">
+                          <img 
+                            src={img.data} 
+                            alt={img.filename}
+                            className="h-20 w-20 object-cover rounded border border-zinc-600"
+                          />
+                          <button
+                            onClick={() => setMemoryImages(prev => prev.filter((_, idx) => idx !== i))}
+                            className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-5 h-5 text-xs opacity-0 group-hover:opacity-100 transition"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
                   <textarea
                     ref={textareaRef}
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
-                    placeholder={`# ${selectedMemory.name}\n\nUse @Name to mention contacts\nUse #tags to organize\nUse [[Title]] for wiki links\nUse - [ ] for action items`}
+                    onPaste={async (e) => {
+                      const items = e.clipboardData?.items;
+                      if (!items) return;
+                      
+                      for (const item of items) {
+                        if (item.type.startsWith('image/')) {
+                          e.preventDefault();
+                          const file = item.getAsFile();
+                          if (!file) continue;
+                          
+                          setUploadingImage(true);
+                          
+                          try {
+                            const reader = new FileReader();
+                            reader.onload = async (event) => {
+                              const imageData = event.target?.result as string;
+                              
+                              const res = await fetch('/api/memories/images', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  imageData,
+                                  memoryPath: selectedMemory?.path,
+                                  filename: 'pasted-image.png',
+                                }),
+                              });
+
+                              const data = await res.json();
+                              
+                              if (data.success) {
+                                const imageMarkdown = `\n${data.markdown}\n`;
+                                setEditContent(prev => prev + imageMarkdown);
+                                setMemoryImages(prev => [...prev, { id: data.imageId, data: imageData, filename: 'pasted-image.png' }]);
+                              }
+                              setUploadingImage(false);
+                            };
+                            reader.readAsDataURL(file);
+                          } catch (error) {
+                            console.error('Paste image error:', error);
+                            setUploadingImage(false);
+                          }
+                          break;
+                        }
+                      }
+                    }}
+                    placeholder={`# ${selectedMemory.name}\n\nUse @Name to mention contacts\nUse #tags to organize\nUse [[Title]] for wiki links\nUse - [ ] for action items\n\n📷 Images will be inserted as markdown`}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 sm:p-4 text-zinc-300 font-mono text-sm min-h-[50vh] sm:min-h-[60vh]"
                   />
-                  <div className="absolute bottom-3 right-3 text-xs text-zinc-500">
+                  <div className="text-xs text-zinc-500">
+                    💡 Tip: Click "Add Image" to upload screenshots or photos. They'll be embedded in your memory.
                     Type @ for contacts, # for tags, [[ for wiki links
                   </div>
                 </div>
