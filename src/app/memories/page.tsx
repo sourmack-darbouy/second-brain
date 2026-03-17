@@ -592,13 +592,21 @@ function MemoriesContent() {
       
       // Fetch each image
       let match;
-      const content = selectedMemory?.content || '';
+      const content = selectedMemory?.content || editContent || '';
       while ((match = imageRegex.exec(content)) !== null) {
         const imageId = match[1];
-        const res = await fetch(`/api/memories/images?id=${imageId}`);
-        const data = await res.json();
-        if (data.data) {
-          images.push({ id: imageId, data: data.data, filename: 'image' });
+        try {
+          // Fetch the image and convert to data URL for preview
+          const res = await fetch(`/api/memories/images?id=${imageId}`);
+          const blob = await res.blob();
+          const dataUrl = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+          images.push({ id: imageId, data: dataUrl, filename: 'image' });
+        } catch (e) {
+          console.error('Failed to load image:', imageId, e);
         }
       }
       
@@ -1028,7 +1036,7 @@ function MemoriesContent() {
                       <button onClick={() => setViewMode(viewMode === 'preview' ? 'source' : 'preview')} className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-zinc-400 text-sm">
                         {viewMode === 'preview' ? '📝 Source' : '👁️ Preview'}
                       </button>
-                      <button onClick={() => setEditing(true)} className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-blue-400 text-sm">Edit</button>
+                      <button onClick={() => { setEditing(true); loadMemoryImages(selectedMemory.path); }} className="bg-zinc-800 hover:bg-zinc-700 px-3 py-1.5 rounded-lg text-blue-400 text-sm">Edit</button>
                       {selectedMemory.type !== 'long-term' && (
                         <button onClick={deleteMemory} className="bg-zinc-800 hover:bg-red-900 px-3 py-1.5 rounded-lg text-red-400 text-sm">Delete</button>
                       )}

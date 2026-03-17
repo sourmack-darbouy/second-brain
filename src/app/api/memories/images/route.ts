@@ -3,7 +3,7 @@ import { Redis } from '@upstash/redis';
 
 const redis = Redis.fromEnv();
 
-// GET - Retrieve image
+// GET - Retrieve image (returns actual image, not JSON)
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const imageId = searchParams.get('id');
@@ -18,7 +18,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Image not found' }, { status: 404 });
   }
   
-  // Return the base64 data directly
+  // If it's a base64 data URL, extract and return the image directly
+  if (imageData.startsWith('data:')) {
+    // Parse the data URL: data:image/png;base64,iVBORw0...
+    const matches = imageData.match(/^data:(image\/[^;]+);base64,(.+)$/);
+    if (matches) {
+      const mimeType = matches[1];
+      const base64Data = matches[2];
+      const buffer = Buffer.from(base64Data, 'base64');
+      
+      return new NextResponse(buffer, {
+        headers: {
+          'Content-Type': mimeType,
+          'Content-Length': buffer.length.toString(),
+          'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
+        },
+      });
+    }
+  }
+  
+  // Fallback: return as JSON for backward compatibility
   return NextResponse.json({ 
     data: imageData,
     id: imageId 
