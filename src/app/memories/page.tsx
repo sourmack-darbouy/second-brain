@@ -328,6 +328,8 @@ function MemoriesContent() {
           important: true,
           dueDate: item.dueDate,
           sourceMemory: selectedMemory?.name,
+          sourceMemoryPath: selectedMemory?.path,
+          sourceActionText: item.text,
         }),
       });
       

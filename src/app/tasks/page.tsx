@@ -11,6 +11,8 @@ interface Task {
   created: string;
   dueDate?: string;
   sourceMemory?: string;
+  sourceMemoryPath?: string;
+  sourceActionText?: string;
   quadrant?: 'do' | 'decide' | 'delegate' | 'delete';
 }
 
@@ -83,11 +85,34 @@ export default function TasksPage() {
     setNewDueDate('');
   };
 
-  const toggleTask = (id: string) => {
+  const toggleTask = async (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    const newCompleted = !task?.completed;
+    
+    // Optimistic update
     const updated = tasks.map(t =>
-      t.id === id ? { ...t, completed: !t.completed } : t
+      t.id === id ? { ...t, completed: newCompleted } : t
     );
-    saveTasks(updated);
+    setTasks(updated);
+    
+    // Sync to memory and save
+    try {
+      const res = await fetch('/api/tasks/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId: id, completed: newCompleted }),
+      });
+      const data = await res.json();
+      
+      // Refresh tasks from server to ensure sync
+      const tasksRes = await fetch('/api/tasks');
+      const tasksData = await tasksRes.json();
+      setTasks(tasksData.tasks || []);
+    } catch (error) {
+      console.error('Failed to sync task:', error);
+      // Revert on error
+      setTasks(tasks);
+    }
   };
 
   const deleteTask = (id: string) => {

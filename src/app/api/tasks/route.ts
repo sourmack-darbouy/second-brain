@@ -12,6 +12,8 @@ interface Task {
   created: string;
   dueDate?: string;
   sourceMemory?: string;
+  sourceMemoryPath?: string;
+  sourceActionText?: string;
 }
 
 export async function GET() {
@@ -50,7 +52,15 @@ export async function DELETE(request: Request) {
 
 // Add a single task from memories
 export async function PATCH(request: Request) {
-  const { text, urgent, important, dueDate, sourceMemory } = await request.json();
+  const { 
+    text, 
+    urgent, 
+    important, 
+    dueDate, 
+    sourceMemory,
+    sourceMemoryPath,
+    sourceActionText
+  } = await request.json();
   
   const tasks = await redis.get<Task[]>('tasks') || [];
   
@@ -63,6 +73,8 @@ export async function PATCH(request: Request) {
     created: new Date().toISOString(),
     dueDate,
     sourceMemory,
+    sourceMemoryPath,
+    sourceActionText,
   };
   
   tasks.push(newTask);
