@@ -10,6 +10,7 @@ interface Task {
   important: boolean;
   created: string;
   dueDate?: string;
+  sourceMemory?: string;
   quadrant?: 'do' | 'decide' | 'delegate' | 'delete';
 }
 
@@ -574,6 +575,11 @@ function TaskItem({
               title="Click to edit"
             >
               {task.text}
+              {task.sourceMemory && (
+                <span className="ml-2 text-xs text-purple-400">
+                  📝 {task.sourceMemory}
+                </span>
+              )}
               {task.dueDate && (
                 <span className={`ml-2 text-xs ${
                   !task.completed && new Date(task.dueDate) < new Date() 

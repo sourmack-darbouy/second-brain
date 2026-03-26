@@ -38,6 +38,7 @@ interface ActionItem {
   text: string;
   dueDate?: string;
   priority: 'high' | 'medium' | 'low';
+  sent?: boolean;
 }
 
 // Parse mentions from content
@@ -314,6 +315,32 @@ function MemoriesContent() {
       setActionItems(extractActionItems(selectedMemory.content));
     }
   }, [selectedMemory?.content]);
+
+  // Send action item to tasks
+  const sendToTasks = async (item: ActionItem) => {
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: item.text,
+          urgent: item.priority === 'high',
+          important: true,
+          dueDate: item.dueDate,
+          sourceMemory: selectedMemory?.name,
+        }),
+      });
+      
+      if (res.ok) {
+        // Mark as sent in UI
+        setActionItems(prev => 
+          prev.map(i => i.text === item.text ? { ...i, sent: true } : i)
+        );
+      }
+    } catch (error) {
+      console.error('Failed to send to tasks:', error);
+    }
+  };
 
   // Filter memories
   const filteredMemories = memories.filter(mem => {
@@ -904,21 +931,36 @@ function MemoriesContent() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-4">
           <h3 className="font-semibold mb-3 flex items-center gap-2">
             ✓ Action Items
+            <span className="text-xs text-zinc-500 font-normal">Click → to send to Tasks</span>
           </h3>
           <div className="space-y-2">
             {actionItems.map((item, i) => (
-              <div key={i} className="flex items-start gap-3 p-2 bg-zinc-800 rounded-lg">
+              <div key={i} className={`flex items-start gap-3 p-2 rounded-lg ${item.sent ? 'bg-green-900/20 border border-green-700/50' : 'bg-zinc-800'}`}>
                 <input type="checkbox" className="mt-1 rounded border-zinc-600" />
                 <div className="flex-1">
-                  <div className={`text-sm ${item.priority === 'high' ? 'text-red-400' : 'text-zinc-300'}`}>
+                  <div className={`text-sm ${item.priority === 'high' ? 'text-red-400' : item.sent ? 'text-green-400' : 'text-zinc-300'}`}>
                     {item.text}
                   </div>
                   {item.dueDate && (
                     <div className="text-xs text-zinc-500 mt-1">Due: {item.dueDate}</div>
                   )}
+                  {item.sent && (
+                    <div className="text-xs text-green-500 mt-1">✓ Sent to Tasks</div>
+                  )}
                 </div>
-                {item.priority === 'high' && (
+                {item.priority === 'high' && !item.sent && (
                   <span className="text-xs bg-red-600/30 text-red-400 px-2 py-0.5 rounded">High</span>
+                )}
+                {!item.sent ? (
+                  <button
+                    onClick={() => sendToTasks(item)}
+                    className="text-blue-400 hover:text-blue-300 hover:bg-blue-900/30 px-2 py-1 rounded text-xs font-medium transition"
+                    title="Send to Tasks"
+                  >
+                    → Tasks
+                  </button>
+                ) : (
+                  <span className="text-green-500 px-2 py-1 text-xs">✓</span>
                 )}
               </div>
             ))}

@@ -10,6 +10,8 @@ interface Task {
   urgent: boolean;
   important: boolean;
   created: string;
+  dueDate?: string;
+  sourceMemory?: string;
 }
 
 export async function GET() {
@@ -44,4 +46,27 @@ export async function DELETE(request: Request) {
   const filtered = tasks.filter(t => t.id !== id);
   await redis.set('tasks', filtered);
   return NextResponse.json({ success: true, tasks: filtered });
+}
+
+// Add a single task from memories
+export async function PATCH(request: Request) {
+  const { text, urgent, important, dueDate, sourceMemory } = await request.json();
+  
+  const tasks = await redis.get<Task[]>('tasks') || [];
+  
+  const newTask: Task = {
+    id: `task-${Date.now()}`,
+    text,
+    completed: false,
+    urgent: urgent ?? false,
+    important: important ?? true,
+    created: new Date().toISOString(),
+    dueDate,
+    sourceMemory,
+  };
+  
+  tasks.push(newTask);
+  await redis.set('tasks', tasks);
+  
+  return NextResponse.json({ success: true, task: newTask, tasks });
 }
