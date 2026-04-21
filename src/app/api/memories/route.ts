@@ -76,8 +76,35 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const { path, content, type, attachments, mode = 'append' } = await request.json();
+  const { path, content, type, attachments, mode = 'append', customer } = await request.json();
   const now = new Date().toISOString();
+
+  // Extract customer from memory content if not provided
+  const extractCustomer = (contentStr: string): string => {
+    // Extract from [[Company Name]] or [[Company (Name)]] patterns
+    const companyMatch = contentStr.match(/\[\[([^(]+)\]\]/);
+    if (companyMatch) {
+      return companyMatch[1].trim();
+    }
+    return '';
+  };
+
+  // Format action items with customer name appended
+  const formatActionItems = (contentStr: string, companyName: string): string => {
+    // Split by action items list (using - [ ] format)
+    const parts = contentStr.split(/\n(?!.*- \[ \])/m); // Split but don't break inside nested lists
+    
+    return parts.map(part => {
+      // Check if part contains action items
+      const hasActionItems = /- \[\]/.test(part);
+      
+      if (hasActionItems && companyName) {
+        // Append company name to action items section
+        return part + (part.endsWith('\n') ? '' : '\n') + `\n**${companyName}** - Action items will be automatically appended with company name for task tracking`;
+      }
+      return part;
+    }).join('\n');
+  };
 
   if (type === 'long-term' || path === 'MEMORY.md') {
     // For long-term memory, check if exists and handle append
@@ -109,6 +136,9 @@ export async function POST(request: Request) {
     let finalContent = content;
     let action = 'created';
     
+    // Determine customer name
+    const companyName = customer || extractCustomer(content);
+    
     if (existingContent) {
       if (mode === 'append') {
         // Append new content with timestamp separator
@@ -117,9 +147,22 @@ export async function POST(request: Request) {
           minute: '2-digit',
           timeZone: 'Europe/Berlin'
         });
-        finalContent = existingContent + `\n\n---\n\n## Added at ${timestamp}\n\n` + content;
+        
+        // Format action items with customer name for new content
+        let formattedContent = content;
+        if (companyName) {
+          formattedContent = formatActionItems(content, companyName);
+        }
+        
+        finalContent = existingContent + `\n\n---\n\n## Added at ${timestamp}\n\n` + formattedContent;
         action = 'appended';
       } else if (mode === 'overwrite') {
+        // Re-format action items with customer name
+        let formattedContent = content;
+        if (companyName) {
+          formattedContent = formatActionItems(content, companyName);
+        }
+        finalContent = formattedContent;
         action = 'overwritten';
       } else if (mode === 'check') {
         // Just check if exists, don't modify
@@ -128,6 +171,11 @@ export async function POST(request: Request) {
           existingContent,
           preview: existingContent.substring(0, 500) + (existingContent.length > 500 ? '...' : '')
         });
+      }
+    } else {
+      // New memory - format action items with customer name
+      if (companyName) {
+        finalContent = formatActionItems(content, companyName);
       }
     }
     
@@ -154,7 +202,8 @@ export async function POST(request: Request) {
       success: true, 
       action,
       wasExisting: !!existingContent,
-      date
+      date,
+      customer: companyName
     });
   }
 }

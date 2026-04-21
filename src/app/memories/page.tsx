@@ -11,6 +11,7 @@ interface Memory {
   lastModified: string;
   type: 'long-term' | 'daily';
   attachments?: string[];
+  customer?: string;
 }
 
 interface Document {
@@ -60,6 +61,15 @@ function parseMentions(content: string): { contacts: string[]; tags: string[] } 
   }
   
   return { contacts: [...new Set(contacts)], tags: [...new Set(tags)] };
+}
+
+// Extract customer/company name from [[Company Name]] pattern
+function extractCustomer(content: string): string {
+  const companyMatch = content.match(/\[\[([^(]+)\]\]/);
+  if (companyMatch) {
+    return companyMatch[1].trim();
+  }
+  return '';
 }
 
 // Extract action items
@@ -1015,7 +1025,8 @@ function MemoriesContent() {
             <div className="space-y-1 max-h-[60vh] lg:max-h-[70vh] overflow-auto">
               {filteredMemories.map(mem => {
                 const { tags: memTags, contacts: memContacts } = parseMentions(mem.content || '');
-                const items = extractActionItems(mem.content || '');
+                const customer = extractCustomer(mem.content || '');
+    const items = extractActionItems(mem.content || '');
                 
                 return (
                   <button
@@ -1064,7 +1075,14 @@ function MemoriesContent() {
                       ← Back to results
                     </button>
                   )}
-                  <h3 className="text-lg sm:text-xl font-semibold">{selectedMemory.name}</h3>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-lg sm:text-xl font-semibold">{selectedMemory.name}</h3>
+                    {selectedMemory.customer && (
+                      <span className="text-xs bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded-full border border-blue-700">
+                        {selectedMemory.customer}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-zinc-400 text-xs hidden sm:block">
