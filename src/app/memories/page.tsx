@@ -340,6 +340,7 @@ function MemoriesContent() {
           sourceMemory: selectedMemory?.name,
           sourceMemoryPath: selectedMemory?.path,
           sourceActionText: item.text,
+          customer: selectedMemory?.customer || extractCustomer(selectedMemory?.content || ''),
         }),
       });
       

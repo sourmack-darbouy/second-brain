@@ -13,6 +13,7 @@ interface Task {
   dueDate?: string;
   sourceMemory?: string;
   sourceMemoryPath?: string;
+  customer?: string;
   sourceActionText?: string;
 }
 
@@ -59,7 +60,8 @@ export async function PATCH(request: Request) {
     dueDate, 
     sourceMemory,
     sourceMemoryPath,
-    sourceActionText
+    sourceActionText,
+    customer
   } = await request.json();
   
   const tasks = await redis.get<Task[]>('tasks') || [];
@@ -75,6 +77,7 @@ export async function PATCH(request: Request) {
     sourceMemory,
     sourceMemoryPath,
     sourceActionText,
+    customer,
   };
   
   tasks.push(newTask);

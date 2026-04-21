@@ -13,6 +13,7 @@ interface Task {
   sourceMemory?: string;
   sourceMemoryPath?: string;
   sourceActionText?: string;
+  customer?: string;
   quadrant?: 'do' | 'decide' | 'delegate' | 'delete';
 }
 
@@ -600,6 +601,11 @@ function TaskItem({
               title="Click to edit"
             >
               {task.text}
+              {task.customer && (
+                <span className="ml-2 text-xs bg-blue-900/50 text-blue-300 px-1.5 py-0.5 rounded-full border border-blue-700">
+                  {task.customer}
+                </span>
+              )}
               {task.sourceMemory && (
                 <span className="ml-2 text-xs text-purple-400">
                   📝 {task.sourceMemory}
