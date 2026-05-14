@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, Suspense } from 'react';
 import Tesseract from 'tesseract.js';
-import { Html5Qrcode } from 'html5-qrcode';
+import jsQR from 'jsqr';
 
 interface Contact {
   id: string;
@@ -74,8 +74,10 @@ function ContactsContent() {
   const [aiScanning, setAiScanning] = useState(false);
   const [qrScannerActive, setQrScannerActive] = useState(false);
   const [qrError, setQrError] = useState<string | null>(null);
-  const qrScannerRef = useRef<HTMLDivElement>(null);
-  const html5QrScannerRef = useRef<Html5Qrcode | null>(null);
+  const qrVideoRef = useRef<HTMLVideoElement>(null);
+  const qrCanvasRef = useRef<HTMLCanvasElement>(null);
+  const qrStreamRef = useRef<MediaStream | null>(null);
+  const qrAnimFrameRef = useRef<number | null>(null);
   
   // Memory mentions
   const [memoryMentions, setMemoryMentions] = useState<{ memoryDate: string; memoryPath: string; context: string; timestamp: string }[]>([]);
@@ -630,60 +632,81 @@ function ContactsContent() {
     return contact;
   };
 
-  // Initialize QR scanner - auto-select back camera, show scanning box
+  // Initialize QR scanner - native camera + jsQR canvas decoding
   useEffect(() => {
-    if (!qrScannerActive || !showScanner || scannerMode !== 'qr' || !qrScannerRef.current) return;
+    if (!qrScannerActive || !showScanner || scannerMode !== 'qr') return;
 
     let mounted = true;
-    let scanner: Html5Qrcode | null = null;
+    let stream: MediaStream | null = null;
+    let animFrame: number | null = null;
+    const video = qrVideoRef.current;
+    const canvas = qrCanvasRef.current;
+    if (!video || !canvas) return;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return;
 
     const initScanner = async () => {
       if (!mounted) return;
-      
       try {
-        // Clear previous scanner
-        qrScannerRef.current!.innerHTML = '';
-        
-        // Create scanner
-        scanner = new Html5Qrcode('qr-reader', { verbose: false });
-        html5QrScannerRef.current = scanner;
-
-        // iOS Safari needs facingMode constraint with exact match
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
                       (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        
-        // Scanner config - fixed qrbox size for iOS compatibility
-        const config = {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
+        const constraints: MediaStreamConstraints = {
+          video: isIOS
+            ? { facingMode: { exact: 'environment' } }
+            : { facingMode: 'environment' }
+        };
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        qrStreamRef.current = stream;
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        await video.play();
+
+        // Wait for video dimensions
+        await new Promise<void>((resolve) => {
+          const check = () => {
+            if (video.videoWidth > 0 && video.videoHeight > 0) resolve();
+            else requestAnimationFrame(check);
+          };
+          check();
+        });
+        if (!mounted) return;
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+
+        const scanFrame = () => {
+          if (!mounted) return;
+          if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const code = jsQR(imageData.data, imageData.width, imageData.height, {
+              inversionAttempts: 'dontInvert',
+            });
+            if (code && code.data) {
+              console.log('✅ QR SCANNED:', code.data);
+              const parsedContact = parseQRData(code.data);
+              setExtractedData(parsedContact);
+              setFormData(prev => ({
+                ...prev,
+                ...parsedContact,
+                source: 'qr_code',
+                tags: [],
+              }));
+              // Stop scanner after successful scan
+              if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                qrStreamRef.current = null;
+              }
+              setQrScannerActive(false);
+              return; // stop scanning
+            }
+          }
+          animFrame = requestAnimationFrame(scanFrame);
         };
 
-        // Use facingMode for camera selection (works on iOS Safari)
-        const cameraConfig = isIOS 
-          ? { facingMode: { exact: "environment" } }
-          : { facingMode: "environment" };
-
-        await scanner.start(
-          cameraConfig,
-          config,
-          (decodedText) => {
-            if (!mounted) return;
-            console.log('✅ QR SCANNED:', decodedText);
-            const parsedContact = parseQRData(decodedText);
-            setExtractedData(parsedContact);
-            setFormData(prev => ({
-              ...prev,
-              ...parsedContact,
-              source: 'qr_code',
-              tags: [],
-            }));
-            // Stop after successful scan
-            scanner?.stop().then(() => setQrScannerActive(false)).catch(() => {});
-          },
-          () => {} // Ignore scan errors
-        );
-        
-        console.log('QR scanner started successfully');
+        animFrame = requestAnimationFrame(scanFrame);
+        qrAnimFrameRef.current = animFrame;
+        console.log('QR scanner started successfully (jsQR canvas mode)');
       } catch (err) {
         console.error('QR scanner error:', err);
         if (mounted) {
@@ -699,8 +722,11 @@ function ContactsContent() {
     return () => {
       mounted = false;
       clearTimeout(timeoutId);
-      if (scanner && scanner.isScanning) {
-        scanner.stop().catch(() => {});
+      if (animFrame != null) cancelAnimationFrame(animFrame);
+      qrAnimFrameRef.current = null;
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+        qrStreamRef.current = null;
       }
     };
   }, [qrScannerActive, showScanner, scannerMode]);
@@ -708,10 +734,14 @@ function ContactsContent() {
   // Stop QR scanner when switching modes or closing modal
   useEffect(() => {
     if (!showScanner || scannerMode !== 'qr') {
-      if (html5QrScannerRef.current && html5QrScannerRef.current.isScanning) {
-        html5QrScannerRef.current.stop().catch(() => {});
+      if (qrAnimFrameRef.current != null) {
+        cancelAnimationFrame(qrAnimFrameRef.current);
+        qrAnimFrameRef.current = null;
       }
-      html5QrScannerRef.current = null;
+      if (qrStreamRef.current) {
+        qrStreamRef.current.getTracks().forEach(t => t.stop());
+        qrStreamRef.current = null;
+      }
       setQrScannerActive(false);
     }
   }, [showScanner, scannerMode]);
@@ -1001,34 +1031,56 @@ function ContactsContent() {
                     </p>
                   </>
                 ) : qrScannerActive ? (
-                  <div>
-                    <div 
-                      ref={qrScannerRef}
-                      id="qr-reader" 
-                      className="w-full bg-black rounded-lg overflow-hidden"
+                  <>
+                  <div className="relative w-full bg-black rounded-lg overflow-hidden" style={{ minHeight: '320px' }}>
+                    <video
+                      ref={qrVideoRef}
+                      className="w-full rounded-lg"
                       style={{ 
                         minHeight: '320px',
-                        minWidth: '100%',
-                        touchAction: 'none',
-                        WebkitTransform: 'translateZ(0)'
+                        objectFit: 'cover',
+                        display: 'block',
                       }}
+                      playsInline
+                      muted
                     />
-                    <p className="text-xs text-zinc-400 text-center mt-2">
+                    {/* Hidden canvas for jsQR decoding */}
+                    <canvas ref={qrCanvasRef} className="hidden" />
+                    {/* Scanning overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <div className="relative" style={{ width: '250px', height: '250px' }}>
+                        {/* Corner accents */}
+                        <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-blue-500 rounded-tl-lg" />
+                        <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-blue-500 rounded-tr-lg" />
+                        <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-blue-500 rounded-bl-lg" />
+                        <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-blue-500 rounded-br-lg" />
+                        {/* Scan line animation */}
+                        <div className="absolute left-2 right-2 h-0.5 bg-blue-400 shadow-lg shadow-blue-400/50 qr-scan-line" />
+                      </div>
+                    </div>
+                    {/* Semi-transparent overlay outside scan area */}
+                    <div className="absolute inset-0 pointer-events-none border-2 border-zinc-600 rounded-lg" />
+                    <p className="text-xs text-zinc-400 text-center mt-2 absolute bottom-2 left-0 right-0">
                       Point camera at QR code...
                     </p>
-                    <button
-                      onClick={() => {
-                        if (html5QrScannerRef.current && html5QrScannerRef.current.isScanning) {
-                          html5QrScannerRef.current.stop().catch(() => {});
-                        }
-                        html5QrScannerRef.current = null;
-                        setQrScannerActive(false);
-                      }}
-                      className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg mt-3"
-                    >
-                      ✕ Cancel
-                    </button>
                   </div>
+                  <button
+                    onClick={() => {
+                      if (qrAnimFrameRef.current != null) {
+                        cancelAnimationFrame(qrAnimFrameRef.current);
+                        qrAnimFrameRef.current = null;
+                      }
+                      if (qrStreamRef.current) {
+                        qrStreamRef.current.getTracks().forEach(t => t.stop());
+                        qrStreamRef.current = null;
+                      }
+                      setQrScannerActive(false);
+                    }}
+                    className="w-full bg-red-600 hover:bg-red-700 py-2 rounded-lg mt-3"
+                  >
+                    ✕ Cancel
+                  </button>
+                  </>
                 ) : qrError ? (
                   <div className="text-center py-4">
                     <p className="text-red-400 mb-3">{qrError}</p>
