@@ -89,6 +89,36 @@ export async function POST(request: Request) {
     return '';
   };
 
+  const slugify = (value: string): string =>
+    value
+      .toLowerCase()
+      .replace(/&/g, ' and ')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60);
+
+  const extractTitle = (contentStr: string): string => {
+    const headingMatch = contentStr.match(/^#\s+(.+)$/m);
+    return headingMatch?.[1]?.trim() || '';
+  };
+
+  const buildDailySlug = (requestedSlug: string, contentStr: string, companyName: string): string => {
+    const dateOnlyMatch = requestedSlug.match(/^(\d{4}-\d{2}-\d{2})$/);
+    if (!dateOnlyMatch) return requestedSlug;
+
+    const date = dateOnlyMatch[1];
+    const title = extractTitle(contentStr);
+    const titleWithoutDate = title
+      .replace(new RegExp('^' + date + '\\s*[-:]?\\s*'), '')
+      .trim();
+
+    const source = companyName || titleWithoutDate;
+    if (!source || source === date) return requestedSlug;
+
+    const suffix = slugify(source);
+    return suffix ? `${date}-${suffix}` : requestedSlug;
+  };
+
   // Format action items with customer name appended
   const formatActionItems = (contentStr: string, companyName: string): string => {
     // Split by action items list (using - [ ] format)
@@ -129,15 +159,16 @@ export async function POST(request: Request) {
     });
   } else {
     // Extract date from path like "memory/2024-01-15.md"
-    const date = path.replace('memory/', '').replace('.md', '');
+    const requestedDate = path.replace('memory/', '').replace('.md', '');
+
+    // Determine customer name
+    const companyName = customer || extractCustomer(content);
+    const date = buildDailySlug(requestedDate, content, companyName);
     
     // Check if memory already exists for this date
     const existingContent = await redis.get<string>(`memories:daily:${date}`);
     let finalContent = content;
     let action = 'created';
-    
-    // Determine customer name
-    const companyName = customer || extractCustomer(content);
     
     if (existingContent) {
       if (mode === 'append') {
